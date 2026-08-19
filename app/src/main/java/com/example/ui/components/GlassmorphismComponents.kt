@@ -26,6 +26,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ripple
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -108,16 +109,16 @@ fun Modifier.expressiveSpringClick(
 }
 
 /**
- * Atmospheric Glassmorphism Canvas Background
- * Combines ethereal wallpaper mesh with animated luminous ambient floating orbs
- * and a deep dark glass vignette scrim for high-contrast readability.
+ * Material 3 Expressive Atmosphere Background Canvas
+ * Combines Material 3 Expressive color scheme background with dynamic ambient floating color orbs
+ * driven by primary, secondary, and tertiary expressivity tokens.
  */
 @Composable
 fun GlassAtmosphereBackground(
     modifier: Modifier = Modifier,
     content: @Composable BoxScope.() -> Unit
 ) {
-    val infiniteTransition = rememberInfiniteTransition(label = "glass_bg_orbs")
+    val infiniteTransition = rememberInfiniteTransition(label = "expressive_bg_orbs")
     val orbAnim1 by infiniteTransition.animateFloat(
         initialValue = -50f,
         targetValue = 60f,
@@ -137,31 +138,27 @@ fun GlassAtmosphereBackground(
         label = "orb2"
     )
 
+    val primaryColor = MaterialTheme.colorScheme.primary
+    val secondaryColor = MaterialTheme.colorScheme.secondary
+    val tertiaryColor = MaterialTheme.colorScheme.tertiary
+    val backgroundColor = MaterialTheme.colorScheme.background
+
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(Color(0xFF070B14))
+            .background(backgroundColor)
     ) {
-        // Base Wallpaper Mesh with Frosted Depth
-        Image(
-            painter = painterResource(id = R.drawable.img_glass_mesh_bg_1786959335929),
-            contentDescription = null,
-            modifier = Modifier.fillMaxSize(),
-            contentScale = ContentScale.Crop,
-            alpha = 0.55f
-        )
-
-        // Animated Ambient Glowing Liquid Canvas Orbs
+        // Material 3 Expressive Animated Ambient Glowing Color Orbs
         Canvas(modifier = Modifier.fillMaxSize()) {
             val canvasW = size.width
             val canvasH = size.height
 
-            // Top-Right Cyan Glow Orb
+            // Top-Right Expressive Primary Glow Orb
             drawCircle(
                 brush = Brush.radialGradient(
                     colors = listOf(
-                        NeonCyan.copy(alpha = 0.28f),
-                        NeonCyan.copy(alpha = 0.08f),
+                        primaryColor.copy(alpha = 0.22f),
+                        primaryColor.copy(alpha = 0.06f),
                         Color.Transparent
                     ),
                     center = Offset(canvasW * 0.85f + orbAnim1, canvasH * 0.15f + orbAnim2),
@@ -169,12 +166,12 @@ fun GlassAtmosphereBackground(
                 )
             )
 
-            // Center-Left Deep Violet Glow Orb
+            // Center-Left Expressive Tertiary Glow Orb
             drawCircle(
                 brush = Brush.radialGradient(
                     colors = listOf(
-                        NeonPurple.copy(alpha = 0.25f),
-                        Color(0xFF3B82F6).copy(alpha = 0.10f),
+                        tertiaryColor.copy(alpha = 0.20f),
+                        secondaryColor.copy(alpha = 0.08f),
                         Color.Transparent
                     ),
                     center = Offset(canvasW * 0.15f - orbAnim2, canvasH * 0.45f + orbAnim1),
@@ -182,11 +179,11 @@ fun GlassAtmosphereBackground(
                 )
             )
 
-            // Bottom-Right Neon Magenta Accent Orb
+            // Bottom-Right Expressive Secondary Accent Orb
             drawCircle(
                 brush = Brush.radialGradient(
                     colors = listOf(
-                        NeonMagenta.copy(alpha = 0.22f),
+                        secondaryColor.copy(alpha = 0.18f),
                         Color.Transparent
                     ),
                     center = Offset(canvasW * 0.8f + orbAnim2, canvasH * 0.82f - orbAnim1),
@@ -195,16 +192,16 @@ fun GlassAtmosphereBackground(
             )
         }
 
-        // Frosted Ambient Dark Scrim for High-Contrast Readability
+        // Material 3 Expressive Surface Tint Overlay
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .background(
                     Brush.verticalGradient(
                         colors = listOf(
-                            Color(0x35060A13),
-                            Color(0x55060A13),
-                            Color(0x65060A13)
+                            backgroundColor.copy(alpha = 0.2f),
+                            backgroundColor.copy(alpha = 0.45f),
+                            backgroundColor.copy(alpha = 0.65f)
                         )
                     )
                 )

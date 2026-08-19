@@ -10,25 +10,30 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 
-private val GlassColorScheme = darkColorScheme(
+private val ExpressiveColorScheme = darkColorScheme(
     primary = NeonCyan,
-    onPrimary = Color(0xFF030D1A),
-    primaryContainer = GlassPillActiveBg,
-    onPrimaryContainer = Color.White,
+    onPrimary = Color(0xFF00363D),
+    primaryContainer = Color(0xFF004F58),
+    onPrimaryContainer = Color(0xFF97F0FF),
     secondary = NeonBlue,
-    onSecondary = Color.White,
-    secondaryContainer = GlassCardSurface,
-    onSecondaryContainer = Color.White,
-    tertiary = NeonEmerald,
-    onTertiary = Color(0xFF021B10),
-    background = GlassCanvasDark,
-    onBackground = TextGlassHeading,
-    surface = GlassCardSurface,
-    onSurface = TextGlassHeading,
-    surfaceVariant = GlassCardSurfaceElevated,
-    onSurfaceVariant = TextGlassSubtitle,
-    outline = GlassBorderBottomLight,
-    outlineVariant = GlassBorderTopLight
+    onSecondary = Color(0xFF002D6F),
+    secondaryContainer = Color(0xFF00439A),
+    onSecondaryContainer = Color(0xFFD6E3FF),
+    tertiary = NeonPurple,
+    onTertiary = Color(0xFF4C007C),
+    tertiaryContainer = Color(0xFF6B00AA),
+    onTertiaryContainer = Color(0xFFF5E1FF),
+    background = Color(0xFF0B0F19),
+    onBackground = Color(0xFFE2E8F0),
+    surface = Color(0xFF131825),
+    onSurface = Color(0xFFF8FAFC),
+    surfaceVariant = Color(0xFF1E2435),
+    onSurfaceVariant = Color(0xFFCBD5E1),
+    surfaceContainer = Color(0xFF171C2C),
+    surfaceContainerHigh = Color(0xFF22283A),
+    surfaceContainerHighest = Color(0xFF2C3348),
+    outline = Color(0x40FFFFFF),
+    outlineVariant = Color(0x20FFFFFF)
 )
 
 @Composable
@@ -49,7 +54,7 @@ fun LiveTranslateTheme(
     }
 
     MaterialTheme(
-        colorScheme = GlassColorScheme,
+        colorScheme = ExpressiveColorScheme,
         typography = Typography,
         content = content
     )
