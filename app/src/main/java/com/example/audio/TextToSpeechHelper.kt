@@ -35,10 +35,25 @@ class TextToSpeechHelper(context: Context) : TextToSpeech.OnInitListener {
         }
     }
 
-    fun speak(text: String, locale: Locale, onStart: (() -> Unit)? = null, onDone: (() -> Unit)? = null) {
+    fun setSpeechRate(rate: Float) {
+        if (isInitialized) {
+            tts?.setSpeechRate(rate)
+        }
+    }
+
+    fun setPitch(pitch: Float) {
+        if (isInitialized) {
+            tts?.setPitch(pitch)
+        }
+    }
+
+    fun speak(text: String, locale: Locale, speedRate: Float = 1.0f, isFemaleVoice: Boolean = true, onStart: (() -> Unit)? = null, onDone: (() -> Unit)? = null) {
         if (!isInitialized || tts == null) return
 
         try {
+            tts?.setSpeechRate(speedRate)
+            tts?.setPitch(if (isFemaleVoice) 1.1f else 0.85f)
+
             val result = tts?.setLanguage(locale)
             if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
                 // Fallback to English if exact locale unavailable

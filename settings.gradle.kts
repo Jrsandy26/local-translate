@@ -22,6 +22,6 @@ dependencyResolutionManagement {
   }
 }
 
-rootProject.name = "Live Translate"
+rootProject.name = "Riva Translate"
 
 include(":app")

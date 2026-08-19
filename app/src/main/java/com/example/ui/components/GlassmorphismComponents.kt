@@ -64,6 +64,49 @@ import com.example.ui.theme.NeonPurple
 import com.example.ui.theme.TextGlassBody
 import com.example.ui.theme.TextGlassHeading
 
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.ui.draw.scale
+
+/**
+ * Material 3 Expressive Shapes Library
+ */
+val ExpressiveCardShape = RoundedCornerShape(28.dp)
+val ExpressivePillShape = CircleShape
+val ExpressiveAsymmetricLeftShape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp, bottomEnd = 28.dp, bottomStart = 8.dp)
+val ExpressiveAsymmetricRightShape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp, bottomStart = 28.dp, bottomEnd = 8.dp)
+
+/**
+ * Material 3 Expressive Bouncy Spring Click Modifier
+ */
+@Composable
+fun Modifier.expressiveSpringClick(
+    enabled: Boolean = true,
+    onClick: () -> Unit
+): Modifier {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed && enabled) 0.94f else 1.0f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessLow
+        ),
+        label = "expressive_spring_scale"
+    )
+
+    return this
+        .scale(scale)
+        .clickable(
+            enabled = enabled,
+            interactionSource = interactionSource,
+            indication = ripple(color = NeonCyan.copy(alpha = 0.35f)),
+            onClick = onClick
+        )
+}
+
 /**
  * Atmospheric Glassmorphism Canvas Background
  * Combines ethereal wallpaper mesh with animated luminous ambient floating orbs
@@ -178,7 +221,7 @@ fun GlassAtmosphereBackground(
 @Composable
 fun GlassCard(
     modifier: Modifier = Modifier,
-    shape: Shape = RoundedCornerShape(22.dp),
+    shape: Shape = ExpressiveCardShape,
     isElevated: Boolean = false,
     isActive: Boolean = false,
     elevation: Dp = if (isElevated) 8.dp else 4.dp,
@@ -239,11 +282,7 @@ fun GlassCard(
             )
             .then(
                 if (onClick != null) {
-                    Modifier.clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = ripple(color = NeonCyan.copy(alpha = 0.3f)),
-                        onClick = onClick
-                    )
+                    Modifier.expressiveSpringClick(onClick = onClick)
                 } else Modifier
             )
             .then(if (testTag.isNotEmpty()) Modifier.testTag(testTag) else Modifier)
@@ -361,11 +400,7 @@ fun GlassIconButton(
                 },
                 shape = shape
             )
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = ripple(color = NeonCyan.copy(alpha = 0.3f)),
-                onClick = onClick
-            )
+            .expressiveSpringClick(onClick = onClick)
             .then(if (testTag.isNotEmpty()) Modifier.testTag(testTag) else Modifier),
         contentAlignment = Alignment.Center
     ) {
@@ -390,7 +425,7 @@ fun GlassButton(
     gradientColors: List<Color> = listOf(NeonCyan, Color(0xFF0066FF)),
     testTag: String = ""
 ) {
-    val shape = RoundedCornerShape(16.dp)
+    val shape = RoundedCornerShape(20.dp)
     Box(
         modifier = modifier
             .shadow(
@@ -410,13 +445,9 @@ fun GlassButton(
                 ),
                 shape = shape
             )
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = ripple(color = Color.White.copy(alpha = 0.35f)),
-                onClick = onClick
-            )
+            .expressiveSpringClick(onClick = onClick)
             .then(if (testTag.isNotEmpty()) Modifier.testTag(testTag) else Modifier)
-            .padding(horizontal = 20.dp, vertical = 13.dp),
+            .padding(horizontal = 20.dp, vertical = 14.dp),
         contentAlignment = Alignment.Center
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {

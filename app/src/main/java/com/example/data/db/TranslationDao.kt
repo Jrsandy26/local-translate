@@ -44,6 +44,9 @@ interface TranslationDao {
     @Query("UPDATE translation_sessions SET durationSeconds = :duration WHERE id = :sessionId")
     suspend fun updateDuration(sessionId: Long, duration: Int)
 
+    @Query("UPDATE translation_sessions SET audioFilePath = :audioPath WHERE id = :sessionId")
+    suspend fun updateAudioFilePath(sessionId: Long, audioPath: String?)
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertSegment(segment: TranscriptSegment): Long
 

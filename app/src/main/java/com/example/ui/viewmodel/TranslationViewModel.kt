@@ -4,11 +4,13 @@ import android.app.Application
 import android.widget.Toast
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.audio.AudioRecorderHelper
 import com.example.audio.SpeechRecognitionHelper
 import com.example.audio.TextToSpeechHelper
 import com.example.data.db.AppDatabase
 import com.example.data.repository.TranslationRepository
 import com.example.engine.OfflineTranslationEngine
+import com.example.translation.GoogleTranslationEngine
 import com.example.export.DocumentExportManager
 import com.example.model.ActiveScreen
 import com.example.model.ExportFormat
@@ -31,6 +33,7 @@ class TranslationViewModel(application: Application) : AndroidViewModel(applicat
 
     private val repository: TranslationRepository
     private val ttsHelper: TextToSpeechHelper = TextToSpeechHelper(application)
+    private val audioRecorderHelper: AudioRecorderHelper = AudioRecorderHelper(application)
     private var speechHelper: SpeechRecognitionHelper? = null
 
     val allSessions: StateFlow<List<SessionWithSegments>>
@@ -75,12 +78,30 @@ class TranslationViewModel(application: Application) : AndroidViewModel(applicat
     private val _activeHighlightIndex = MutableStateFlow<Int?>(null)
     val activeHighlightIndex: StateFlow<Int?> = _activeHighlightIndex.asStateFlow()
 
-    // Active Languages
+    // Settings States
+    val voiceSpeedStage = MutableStateFlow(2) // 0: 0.5x, 1: 0.75x, 2: 1.0x (Normal), 3: 1.25x
+    val isFemaleVoice = MutableStateFlow(true) // true: Female, false: Male
+
+    fun getVoiceSpeedRate(): Float {
+        return when (voiceSpeedStage.value) {
+            0 -> 0.5f
+            1 -> 0.75f
+            2 -> 1.0f
+            3 -> 1.25f
+            else -> 1.0f
+        }
+    }
     private val _sourceLanguage = MutableStateFlow(Language.findByCode("en"))
     val sourceLanguage: StateFlow<Language> = _sourceLanguage.asStateFlow()
 
     private val _targetLanguage = MutableStateFlow(Language.findByCode("ja"))
     val targetLanguage: StateFlow<Language> = _targetLanguage.asStateFlow()
+
+    // Google ML Kit Model States
+    val downloadedModels = MutableStateFlow<Map<String, Boolean>>(
+        mapOf("en" to true, "ja" to true)
+    )
+    val downloadingModels = MutableStateFlow<Map<String, Boolean>>(emptyMap())
 
     // Face to Face Mode States
     private val _faceToFaceSpeaker1Text = MutableStateFlow("")
@@ -123,12 +144,23 @@ class TranslationViewModel(application: Application) : AndroidViewModel(applicat
             context = application,
             onPartialResult = { partial ->
                 partialTranscriptText.value = partial
-                val trans = OfflineTranslationEngine.translate(
+                val immediate = OfflineTranslationEngine.translate(
                     partial,
                     _sourceLanguage.value.code,
                     _targetLanguage.value.code
                 )
-                partialTranslationText.value = trans
+                partialTranslationText.value = immediate
+                
+                viewModelScope.launch {
+                    val googleRes = GoogleTranslationEngine.translate(
+                        partial,
+                        _sourceLanguage.value.code,
+                        _targetLanguage.value.code
+                    )
+                    if (!googleRes.isNullOrBlank()) {
+                        partialTranslationText.value = googleRes
+                    }
+                }
             },
             onFinalResult = { final ->
                 processLiveSpeechResult(final, "Speaker 1")
@@ -177,14 +209,14 @@ class TranslationViewModel(application: Application) : AndroidViewModel(applicat
     fun setSourceLanguage(language: Language) {
         _sourceLanguage.value = language
         if (homeInputText.value.isNotBlank()) {
-            homeTranslatedText.value = OfflineTranslationEngine.translate(homeInputText.value, language.code, _targetLanguage.value.code)
+            setHomeInputText(homeInputText.value)
         }
     }
 
     fun setTargetLanguage(language: Language) {
         _targetLanguage.value = language
         if (homeInputText.value.isNotBlank()) {
-            homeTranslatedText.value = OfflineTranslationEngine.translate(homeInputText.value, _sourceLanguage.value.code, language.code)
+            setHomeInputText(homeInputText.value)
         }
     }
 
@@ -193,7 +225,7 @@ class TranslationViewModel(application: Application) : AndroidViewModel(applicat
         _sourceLanguage.value = _targetLanguage.value
         _targetLanguage.value = temp
         if (homeInputText.value.isNotBlank()) {
-            homeTranslatedText.value = OfflineTranslationEngine.translate(homeInputText.value, _sourceLanguage.value.code, _targetLanguage.value.code)
+            setHomeInputText(homeInputText.value)
         }
     }
 
@@ -202,7 +234,15 @@ class TranslationViewModel(application: Application) : AndroidViewModel(applicat
         if (text.isBlank()) {
             homeTranslatedText.value = ""
         } else {
-            homeTranslatedText.value = OfflineTranslationEngine.translate(text, _sourceLanguage.value.code, _targetLanguage.value.code)
+            val immediate = OfflineTranslationEngine.translate(text, _sourceLanguage.value.code, _targetLanguage.value.code)
+            homeTranslatedText.value = immediate
+
+            viewModelScope.launch {
+                val googleRes = GoogleTranslationEngine.translate(text, _sourceLanguage.value.code, _targetLanguage.value.code)
+                if (!googleRes.isNullOrBlank()) {
+                    homeTranslatedText.value = googleRes
+                }
+            }
         }
     }
 
@@ -214,14 +254,49 @@ class TranslationViewModel(application: Application) : AndroidViewModel(applicat
     fun speakHomeTranslation() {
         val text = homeTranslatedText.value
         if (text.isNotBlank()) {
-            ttsHelper.speak(text, _targetLanguage.value.locale)
+            ttsHelper.speak(
+                text = text,
+                locale = _targetLanguage.value.locale,
+                speedRate = getVoiceSpeedRate(),
+                isFemaleVoice = isFemaleVoice.value
+            )
         }
     }
 
     fun speakHomeSource() {
         val text = homeInputText.value
         if (text.isNotBlank()) {
-            ttsHelper.speak(text, _sourceLanguage.value.locale)
+            ttsHelper.speak(
+                text = text,
+                locale = _sourceLanguage.value.locale,
+                speedRate = getVoiceSpeedRate(),
+                isFemaleVoice = isFemaleVoice.value
+            )
+        }
+    }
+
+    fun saveHomeTranslationToHistory() {
+        val srcText = homeInputText.value
+        val transText = homeTranslatedText.value
+        if (srcText.isBlank() || transText.isBlank()) return
+
+        viewModelScope.launch {
+            val title = "Saved: ${srcText.take(20)}..."
+            val newId = repository.createNewSession(
+                title = title,
+                sourceLanguageCode = _sourceLanguage.value.code,
+                targetLanguageCode = _targetLanguage.value.code
+            )
+            repository.addSegment(
+                sessionId = newId,
+                timeOffsetSeconds = 0,
+                sourceText = srcText,
+                translatedText = transText,
+                speaker = "User",
+                orderIndex = 0
+            )
+            repository.toggleFavorite(newId, false)
+            Toast.makeText(getApplication(), "Saved to History & Favorites!", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -279,6 +354,16 @@ class TranslationViewModel(application: Application) : AndroidViewModel(applicat
         partialTranscriptText.value = ""
         partialTranslationText.value = ""
 
+        val sessId = _currentSessionId.value
+        if (recordAudioEnabled.value && sessId != null) {
+            val audioPath = audioRecorderHelper.startRecording(sessId)
+            if (audioPath != null) {
+                viewModelScope.launch {
+                    repository.updateSessionAudioPath(sessId, audioPath)
+                }
+            }
+        }
+
         try {
             speechHelper?.startListening(_sourceLanguage.value.locale, continuous = true)
         } catch (e: Exception) {
@@ -291,9 +376,9 @@ class TranslationViewModel(application: Application) : AndroidViewModel(applicat
                 delay(1000)
                 _totalDurationSec.value += 1
                 _currentPlaybackSec.value = _totalDurationSec.value
-                val sessId = _currentSessionId.value
-                if (sessId != null) {
-                    repository.updateSessionDuration(sessId, _totalDurationSec.value)
+                val id = _currentSessionId.value
+                if (id != null) {
+                    repository.updateSessionDuration(id, _totalDurationSec.value)
                 }
             }
         }
@@ -302,6 +387,13 @@ class TranslationViewModel(application: Application) : AndroidViewModel(applicat
     fun stopLiveListening() {
         _isListening.value = false
         speechHelper?.stopListening()
+        val savedPath = audioRecorderHelper.stopRecording()
+        val sessId = _currentSessionId.value
+        if (savedPath != null && sessId != null) {
+            viewModelScope.launch {
+                repository.updateSessionAudioPath(sessId, savedPath)
+            }
+        }
         liveTimerJob?.cancel()
         partialTranscriptText.value = ""
         partialTranslationText.value = ""
@@ -340,7 +432,10 @@ class TranslationViewModel(application: Application) : AndroidViewModel(applicat
             val srcLangCode = if (isSpeaker1) _sourceLanguage.value.code else _targetLanguage.value.code
             val tgtLangCode = if (isSpeaker1) _targetLanguage.value.code else _sourceLanguage.value.code
 
-            val translated = OfflineTranslationEngine.translate(text, srcLangCode, tgtLangCode)
+            var translated = GoogleTranslationEngine.translate(text, srcLangCode, tgtLangCode)
+            if (translated.isNullOrBlank()) {
+                translated = OfflineTranslationEngine.translate(text, srcLangCode, tgtLangCode)
+            }
 
             val order = currentSess.segments.size
             val timeOffset = if (_currentPlaybackSec.value > 0) _currentPlaybackSec.value else (order * 15 + 5)
@@ -394,6 +489,15 @@ class TranslationViewModel(application: Application) : AndroidViewModel(applicat
         stopLiveListening()
         _isPlayingAudio.value = true
 
+        val audioPath = _currentSession.value?.session?.audioFilePath
+        if (!audioPath.isNullOrBlank()) {
+            audioRecorderHelper.playAudio(audioPath) {
+                _isPlayingAudio.value = false
+                _currentPlaybackSec.value = 0
+                _activeHighlightIndex.value = null
+            }
+        }
+
         playbackJob?.cancel()
         playbackJob = viewModelScope.launch {
             val maxDuration = _totalDurationSec.value.coerceAtLeast(30)
@@ -423,6 +527,7 @@ class TranslationViewModel(application: Application) : AndroidViewModel(applicat
         _isPlayingAudio.value = false
         playbackJob?.cancel()
         ttsHelper.stop()
+        audioRecorderHelper.stopPlayback()
     }
 
     fun seekTo(seconds: Int) {
@@ -439,6 +544,8 @@ class TranslationViewModel(application: Application) : AndroidViewModel(applicat
         ttsHelper.speak(
             text = segment.translatedText,
             locale = targetLocale,
+            speedRate = getVoiceSpeedRate(),
+            isFemaleVoice = isFemaleVoice.value,
             onStart = { _isSpeaking.value = true },
             onDone = { _isSpeaking.value = false }
         )
@@ -450,6 +557,8 @@ class TranslationViewModel(application: Application) : AndroidViewModel(applicat
         ttsHelper.speak(
             text = segment.sourceText,
             locale = sourceLocale,
+            speedRate = getVoiceSpeedRate(),
+            isFemaleVoice = isFemaleVoice.value,
             onStart = { _isSpeaking.value = true },
             onDone = { _isSpeaking.value = false }
         )
@@ -458,17 +567,82 @@ class TranslationViewModel(application: Application) : AndroidViewModel(applicat
     // Face to Face Mode Operations
     fun processFaceToFaceSpeech(speaker: Int, text: String) {
         if (text.isBlank()) return
+        viewModelScope.launch {
+            if (speaker == 1) {
+                _faceToFaceSpeaker1Text.value = text
+                var trans = GoogleTranslationEngine.translate(text, _sourceLanguage.value.code, _targetLanguage.value.code)
+                if (trans.isNullOrBlank()) {
+                    trans = OfflineTranslationEngine.translate(text, _sourceLanguage.value.code, _targetLanguage.value.code)
+                }
+                _faceToFaceSpeaker1Trans.value = trans
+                ttsHelper.speak(trans, _targetLanguage.value.locale)
+            } else {
+                _faceToFaceSpeaker2Text.value = text
+                var trans = GoogleTranslationEngine.translate(text, _targetLanguage.value.code, _sourceLanguage.value.code)
+                if (trans.isNullOrBlank()) {
+                    trans = OfflineTranslationEngine.translate(text, _targetLanguage.value.code, _sourceLanguage.value.code)
+                }
+                _faceToFaceSpeaker2Trans.value = trans
+                ttsHelper.speak(trans, _sourceLanguage.value.locale)
+            }
+        }
+    }
 
-        if (speaker == 1) {
-            _faceToFaceSpeaker1Text.value = text
-            val trans = OfflineTranslationEngine.translate(text, _sourceLanguage.value.code, _targetLanguage.value.code)
-            _faceToFaceSpeaker1Trans.value = trans
-            ttsHelper.speak(trans, _targetLanguage.value.locale)
-        } else {
-            _faceToFaceSpeaker2Text.value = text
-            val trans = OfflineTranslationEngine.translate(text, _targetLanguage.value.code, _sourceLanguage.value.code)
-            _faceToFaceSpeaker2Trans.value = trans
-            ttsHelper.speak(trans, _sourceLanguage.value.locale)
+    // Google ML Kit Language Pack Model Downloads
+    fun refreshDownloadedModels() {
+        viewModelScope.launch {
+            val updatedMap = mutableMapOf<String, Boolean>()
+            Language.SUPPORTED_LANGUAGES.forEach { lang ->
+                val isDownloaded = GoogleTranslationEngine.isModelDownloaded(lang.code)
+                updatedMap[lang.code] = isDownloaded
+            }
+            downloadedModels.value = updatedMap
+        }
+    }
+
+    fun downloadGoogleLanguageModel(langCode: String) {
+        viewModelScope.launch {
+            val currentDownloading = downloadingModels.value.toMutableMap()
+            currentDownloading[langCode] = true
+            downloadingModels.value = currentDownloading
+
+            GoogleTranslationEngine.downloadModel(
+                langCode = langCode,
+                onSuccess = {
+                    val updatedDownloading = downloadingModels.value.toMutableMap()
+                    updatedDownloading.remove(langCode)
+                    downloadingModels.value = updatedDownloading
+
+                    val updatedDownloaded = downloadedModels.value.toMutableMap()
+                    updatedDownloaded[langCode] = true
+                    downloadedModels.value = updatedDownloaded
+
+                    Toast.makeText(getApplication(), "Downloaded Google model for ${Language.findByCode(langCode).name}", Toast.LENGTH_SHORT).show()
+                },
+                onFailure = {
+                    val updatedDownloading = downloadingModels.value.toMutableMap()
+                    updatedDownloading.remove(langCode)
+                    downloadingModels.value = updatedDownloading
+
+                    Toast.makeText(getApplication(), "Failed to download model for ${langCode.uppercase()}", Toast.LENGTH_SHORT).show()
+                }
+            )
+        }
+    }
+
+    fun deleteGoogleLanguageModel(langCode: String) {
+        viewModelScope.launch {
+            if (langCode.equals("en", ignoreCase = true)) {
+                Toast.makeText(getApplication(), "English base model is required", Toast.LENGTH_SHORT).show()
+                return@launch
+            }
+            val deleted = GoogleTranslationEngine.deleteModel(langCode)
+            if (deleted) {
+                val updatedDownloaded = downloadedModels.value.toMutableMap()
+                updatedDownloaded[langCode] = false
+                downloadedModels.value = updatedDownloaded
+                Toast.makeText(getApplication(), "Removed Google model for ${Language.findByCode(langCode).name}", Toast.LENGTH_SHORT).show()
+            }
         }
     }
 
@@ -521,6 +695,7 @@ class TranslationViewModel(application: Application) : AndroidViewModel(applicat
         super.onCleared()
         speechHelper?.destroy()
         ttsHelper.shutdown()
+        audioRecorderHelper.release()
         playbackJob?.cancel()
         liveTimerJob?.cancel()
     }

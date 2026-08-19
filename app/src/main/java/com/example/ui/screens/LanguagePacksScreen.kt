@@ -16,19 +16,19 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateMapOf
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -36,6 +36,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.model.ActiveScreen
 import com.example.model.Language
 import com.example.ui.components.GlassAtmosphereBackground
@@ -50,27 +51,11 @@ import com.example.ui.viewmodel.TranslationViewModel
 
 @Composable
 fun LanguagePacksScreen(viewModel: TranslationViewModel) {
-    // Maintain local mock download state for the session
-    val downloadedPacks = remember {
-        mutableStateMapOf(
-            "en" to true,
-            "ja" to true,
-            "es" to false,
-            "zh" to false,
-            "fr" to false,
-            "de" to false
-        )
-    }
+    val downloadedModels by viewModel.downloadedModels.collectAsStateWithLifecycle()
+    val downloadingModels by viewModel.downloadingModels.collectAsStateWithLifecycle()
 
-    val packSizes = remember {
-        mapOf(
-            "en" to "74 MB",
-            "ja" to "118 MB",
-            "es" to "68 MB",
-            "zh" to "142 MB",
-            "fr" to "82 MB",
-            "de" to "89 MB"
-        )
+    LaunchedEffect(Unit) {
+        viewModel.refreshDownloadedModels()
     }
 
     GlassAtmosphereBackground(modifier = Modifier.fillMaxSize()) {
@@ -95,7 +80,7 @@ fun LanguagePacksScreen(viewModel: TranslationViewModel) {
                     )
                     Spacer(modifier = Modifier.width(12.dp))
                     Text(
-                        text = "Offline Language Packs",
+                        text = "Google Offline Models",
                         color = TextGlassHeading,
                         fontSize = 19.sp,
                         fontWeight = FontWeight.Bold
@@ -119,7 +104,7 @@ fun LanguagePacksScreen(viewModel: TranslationViewModel) {
                     )
                     Spacer(modifier = Modifier.width(10.dp))
                     Text(
-                        text = "Downloaded packs enable neural on-device translations when you have no network access.",
+                        text = "Download Google Translate neural models for high-accuracy offline speech & text translation without internet.",
                         color = TextGlassBody,
                         fontSize = 12.sp,
                         lineHeight = 16.sp
@@ -136,15 +121,20 @@ fun LanguagePacksScreen(viewModel: TranslationViewModel) {
             ) {
                 items(Language.SUPPORTED_LANGUAGES) { language ->
                     val code = language.code
-                    val isDownloaded = downloadedPacks[code] ?: false
-                    val size = packSizes[code] ?: "80 MB"
+                    val isDownloaded = downloadedModels[code] ?: (code == "en" || code == "ja")
+                    val isDownloading = downloadingModels[code] ?: false
 
                     LanguagePackRow(
                         language = language,
-                        size = size,
+                        size = "${language.modelSizeMb} MB",
                         isDownloaded = isDownloaded,
+                        isDownloading = isDownloading,
                         onDownloadClick = {
-                            downloadedPacks[code] = !isDownloaded
+                            if (isDownloaded) {
+                                viewModel.deleteGoogleLanguageModel(code)
+                            } else if (!isDownloading) {
+                                viewModel.downloadGoogleLanguageModel(code)
+                            }
                         }
                     )
                 }
@@ -158,6 +148,7 @@ fun LanguagePackRow(
     language: Language,
     size: String,
     isDownloaded: Boolean,
+    isDownloading: Boolean,
     onDownloadClick: () -> Unit
 ) {
     GlassCard(
@@ -169,22 +160,51 @@ fun LanguagePackRow(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Column {
+            Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    text = language.name,
-                    color = TextGlassHeading,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Bold
+                    text = language.flag,
+                    fontSize = 24.sp,
+                    modifier = Modifier.padding(end = 12.dp)
                 )
-                Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    text = "${language.nativeName}  •  $size",
-                    color = TextGlassMuted,
-                    fontSize = 12.sp
-                )
+                Column {
+                    Text(
+                        text = language.name,
+                        color = TextGlassHeading,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = "${language.nativeName}  •  Google Neural ($size)",
+                        color = TextGlassMuted,
+                        fontSize = 12.sp
+                    )
+                }
             }
 
-            if (isDownloaded) {
+            if (isDownloading) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(Color(0x1500F0FF))
+                        .border(1.dp, NeonCyan.copy(alpha = 0.4f), RoundedCornerShape(20.dp))
+                        .padding(horizontal = 12.dp, vertical = 6.dp)
+                ) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(14.dp),
+                        color = NeonCyan,
+                        strokeWidth = 2.dp
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "Downloading...",
+                        color = NeonCyan,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            } else if (isDownloaded) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
@@ -207,6 +227,15 @@ fun LanguagePackRow(
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold
                     )
+                    if (language.code != "en") {
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Icon(
+                            imageVector = Icons.Default.Delete,
+                            contentDescription = "Uninstall",
+                            tint = TextGlassMuted,
+                            modifier = Modifier.size(14.dp)
+                        )
+                    }
                 }
             } else {
                 Row(

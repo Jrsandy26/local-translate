@@ -158,6 +158,12 @@ class TranslationRepository(private val dao: TranslationDao) {
         }
     }
 
+    suspend fun updateSessionAudioPath(sessionId: Long, audioPath: String?) {
+        withContext(Dispatchers.IO) {
+            dao.updateAudioFilePath(sessionId, audioPath)
+        }
+    }
+
     suspend fun toggleFavorite(sessionId: Long, currentStatus: Boolean) {
         withContext(Dispatchers.IO) {
             dao.updateFavoriteStatus(sessionId, !currentStatus)

@@ -1,6 +1,12 @@
 package com.example.ui.screens
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.widget.Toast
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -19,15 +25,18 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.ContentPaste
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Mic
-import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.School
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material.icons.filled.VolumeUp
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -35,31 +44,36 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.model.ActiveScreen
-import com.example.ui.components.LanguageSelectorSheet
 import com.example.ui.components.GlassAtmosphereBackground
+import com.example.ui.components.GlassButton
 import com.example.ui.components.GlassCard
 import com.example.ui.components.GlassIconButton
-import com.example.ui.components.GlassButton
+import com.example.ui.components.LanguageSelectorSheet
+import com.example.ui.components.QuickSpeechInputDialog
 import com.example.ui.theme.NeonCyan
 import com.example.ui.theme.NeonEmerald
 import com.example.ui.theme.TextGlassBody
 import com.example.ui.theme.TextGlassHeading
 import com.example.ui.theme.TextGlassMuted
-import com.example.ui.theme.TextGlassSubtitle
 import com.example.ui.viewmodel.TranslationViewModel
 
 @Composable
 fun TranslateHomeScreen(viewModel: TranslationViewModel) {
+    val context = LocalContext.current
     val sourceLang by viewModel.sourceLanguage.collectAsState()
     val targetLang by viewModel.targetLanguage.collectAsState()
     val homeInputText by viewModel.homeInputText.collectAsState()
@@ -67,16 +81,18 @@ fun TranslateHomeScreen(viewModel: TranslationViewModel) {
     val showLanguageSheet by viewModel.showLanguageSheet.collectAsState()
     val isSelectingSourceLanguage by viewModel.isSelectingSourceLanguage.collectAsState()
 
+    var showDictationDialog by remember { mutableStateOf(false) }
+
     GlassAtmosphereBackground(modifier = Modifier.fillMaxSize()) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(20.dp)
-                .padding(top = 28.dp),
+                .padding(horizontal = 20.dp, vertical = 16.dp)
+                .padding(top = 24.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Header / App Title
+            // Header Bar
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -85,13 +101,13 @@ fun TranslateHomeScreen(viewModel: TranslationViewModel) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
                         imageVector = Icons.Default.Translate,
-                        contentDescription = "App Logo",
+                        contentDescription = "Riva Translate",
                         tint = NeonCyan,
                         modifier = Modifier.size(28.dp)
                     )
                     Spacer(modifier = Modifier.width(10.dp))
                     Text(
-                        text = "LinguaGlass",
+                        text = "Riva Translate",
                         color = TextGlassHeading,
                         fontSize = 24.sp,
                         fontWeight = FontWeight.Bold,
@@ -99,11 +115,15 @@ fun TranslateHomeScreen(viewModel: TranslationViewModel) {
                     )
                 }
 
-                // Row of top buttons
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     GlassIconButton(
+                        icon = Icons.Default.School,
+                        contentDescription = "Language Learning",
+                        onClick = { viewModel.setActiveScreen(ActiveScreen.LANGUAGE_LEARNING) }
+                    )
+                    GlassIconButton(
                         icon = Icons.Default.History,
-                        contentDescription = "Translation History",
+                        contentDescription = "History",
                         onClick = { viewModel.setActiveScreen(ActiveScreen.HISTORY) }
                     )
                     GlassIconButton(
@@ -111,61 +131,66 @@ fun TranslateHomeScreen(viewModel: TranslationViewModel) {
                         contentDescription = "Language Packs",
                         onClick = { viewModel.setActiveScreen(ActiveScreen.LANGUAGE_PACKS) }
                     )
+                    GlassIconButton(
+                        icon = Icons.Default.Settings,
+                        contentDescription = "Settings",
+                        onClick = { viewModel.setActiveScreen(ActiveScreen.SETTINGS) }
+                    )
                 }
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Language Selector Component
+            // Language Selector Panel
             GlassCard(modifier = Modifier.fillMaxWidth()) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Source Language Button
+                    // Source Language Selector
                     Column(
                         modifier = Modifier
                             .weight(1f)
+                            .clip(RoundedCornerShape(12.dp))
                             .clickable {
                                 viewModel.isSelectingSourceLanguage.value = true
                                 viewModel.showLanguageSheet.value = true
                             }
-                            .padding(8.dp),
+                            .padding(vertical = 8.dp, horizontal = 12.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Text("FROM", color = TextGlassMuted, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                         Spacer(modifier = Modifier.height(4.dp))
-                        Text(sourceLang.name, color = TextGlassHeading, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                        Text(sourceLang.name, color = NeonCyan, fontSize = 16.sp, fontWeight = FontWeight.Bold)
                     }
 
                     // Swap Button
                     GlassIconButton(
                         icon = Icons.Default.SwapHoriz,
                         contentDescription = "Swap Languages",
-                        size = 36.dp,
+                        size = 38.dp,
                         onClick = { viewModel.swapLanguages() }
                     )
 
-                    // Target Language Button
+                    // Target Language Selector
                     Column(
                         modifier = Modifier
                             .weight(1f)
+                            .clip(RoundedCornerShape(12.dp))
                             .clickable {
                                 viewModel.isSelectingSourceLanguage.value = false
                                 viewModel.showLanguageSheet.value = true
                             }
-                            .padding(8.dp),
+                            .padding(vertical = 8.dp, horizontal = 12.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Text("TO", color = TextGlassMuted, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                         Spacer(modifier = Modifier.height(4.dp))
-                        Text(targetLang.name, color = TextGlassHeading, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                        Text(targetLang.name, color = Color(0xFFC084FC), fontSize = 16.sp, fontWeight = FontWeight.Bold)
                     }
                 }
             }
 
-            // Input Card
+            // Large Text Input Card with Dictation Mic
             GlassCard(
                 modifier = Modifier.fillMaxWidth(),
                 isElevated = true
@@ -177,58 +202,104 @@ fun TranslateHomeScreen(viewModel: TranslationViewModel) {
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = sourceLang.name,
+                            text = "${sourceLang.name} (Source Text)",
                             color = NeonCyan,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold
                         )
-                        if (homeInputText.isNotEmpty()) {
-                            IconButtonWithRipple(
-                                icon = Icons.Default.Clear,
-                                contentDescription = "Clear input",
-                                onClick = { viewModel.clearHomeInput() }
-                            )
+
+                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            if (homeInputText.isNotEmpty()) {
+                                GlassIconButton(
+                                    icon = Icons.Default.VolumeUp,
+                                    contentDescription = "Speak source",
+                                    size = 30.dp,
+                                    onClick = { viewModel.speakHomeSource() }
+                                )
+                                GlassIconButton(
+                                    icon = Icons.Default.Clear,
+                                    contentDescription = "Clear input",
+                                    size = 30.dp,
+                                    onClick = { viewModel.clearHomeInput() }
+                                )
+                            }
                         }
                     }
 
-                    OutlinedTextField(
-                        value = homeInputText,
-                        onValueChange = { viewModel.setHomeInputText(it) },
-                        placeholder = { Text("Enter text to translate...", color = TextGlassMuted) },
+                    Box(modifier = Modifier.fillMaxWidth().height(120.dp)) {
+                        OutlinedTextField(
+                            value = homeInputText,
+                            onValueChange = { viewModel.setHomeInputText(it) },
+                            placeholder = { Text("Type, paste, or speak text to translate...", color = TextGlassMuted) },
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .testTag("text_input"),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = Color.Transparent,
+                                unfocusedBorderColor = Color.Transparent,
+                                focusedTextColor = TextGlassHeading,
+                                unfocusedTextColor = TextGlassBody
+                            ),
+                            textStyle = androidx.compose.ui.text.TextStyle(fontSize = 17.sp, lineHeight = 24.sp)
+                        )
+                    }
+
+                    // Bottom Action Row inside Input Card (Mic Dictation & Paste)
+                    Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(130.dp)
-                            .testTag("text_input"),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = Color.Transparent,
-                            unfocusedBorderColor = Color.Transparent,
-                            focusedTextColor = TextGlassHeading,
-                            unfocusedTextColor = TextGlassBody
-                        ),
-                        textStyle = androidx.compose.ui.text.TextStyle(fontSize = 18.sp, lineHeight = 24.sp)
-                    )
-
-                    if (homeInputText.isNotEmpty()) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.End
+                            .padding(top = 4.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // Dictation Mic Button
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(20.dp))
+                                .background(NeonCyan.copy(alpha = 0.15f))
+                                .border(1.dp, NeonCyan.copy(alpha = 0.4f), RoundedCornerShape(20.dp))
+                                .clickable { showDictationDialog = true }
+                                .padding(horizontal = 14.dp, vertical = 6.dp),
+                            contentAlignment = Alignment.Center
                         ) {
-                            GlassIconButton(
-                                icon = Icons.Default.VolumeUp,
-                                contentDescription = "Speak source",
-                                size = 32.dp,
-                                onClick = { viewModel.speakHomeSource() }
-                            )
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.Mic,
+                                    contentDescription = "Voice Dictation",
+                                    tint = NeonCyan,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Dictate", color = NeonCyan, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            }
                         }
+
+                        // Paste Button
+                        GlassIconButton(
+                            icon = Icons.Default.ContentPaste,
+                            contentDescription = "Paste",
+                            size = 30.dp,
+                            onClick = {
+                                try {
+                                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                    val clipData = clipboard.primaryClip
+                                    if (clipData != null && clipData.itemCount > 0) {
+                                        val pasteText = clipData.getItemAt(0).text.toString()
+                                        if (pasteText.isNotBlank()) {
+                                            viewModel.setHomeInputText(pasteText)
+                                        }
+                                    }
+                                } catch (_: Exception) {}
+                            }
+                        )
                     }
                 }
             }
 
-            // Translation Card (only shown when translated text is available)
-            if (homeTranslatedText.isNotEmpty()) {
+            // Real-time Translation Output Card
+            AnimatedVisibility(visible = homeTranslatedText.isNotEmpty()) {
                 GlassCard(
                     modifier = Modifier.fillMaxWidth(),
-                    isElevated = false,
                     isActive = true
                 ) {
                     Column(modifier = Modifier.fillMaxWidth()) {
@@ -238,17 +309,40 @@ fun TranslateHomeScreen(viewModel: TranslationViewModel) {
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                text = targetLang.name,
+                                text = "${targetLang.name} (Translation)",
                                 color = NeonEmerald,
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold
                             )
-                            GlassIconButton(
-                                icon = Icons.Default.VolumeUp,
-                                contentDescription = "Speak translation",
-                                size = 32.dp,
-                                onClick = { viewModel.speakHomeTranslation() }
-                            )
+
+                            // Translation Actions: Copy, Speak, Star / Save
+                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                GlassIconButton(
+                                    icon = Icons.Default.ContentCopy,
+                                    contentDescription = "Copy Translation",
+                                    size = 32.dp,
+                                    onClick = {
+                                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                        val clip = ClipData.newPlainText("Translated Text", homeTranslatedText)
+                                        clipboard.setPrimaryClip(clip)
+                                        Toast.makeText(context, "Copied to clipboard!", Toast.LENGTH_SHORT).show()
+                                    }
+                                )
+
+                                GlassIconButton(
+                                    icon = Icons.Default.VolumeUp,
+                                    contentDescription = "Speak Translation",
+                                    size = 32.dp,
+                                    onClick = { viewModel.speakHomeTranslation() }
+                                )
+
+                                GlassIconButton(
+                                    icon = Icons.Default.Star,
+                                    contentDescription = "Save Translation",
+                                    size = 32.dp,
+                                    onClick = { viewModel.saveHomeTranslationToHistory() }
+                                )
+                            }
                         }
 
                         Spacer(modifier = Modifier.height(10.dp))
@@ -257,38 +351,82 @@ fun TranslateHomeScreen(viewModel: TranslationViewModel) {
                             text = homeTranslatedText,
                             color = TextGlassHeading,
                             fontSize = 20.sp,
-                            fontWeight = FontWeight.Medium,
-                            lineHeight = 26.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            lineHeight = 28.sp,
                             modifier = Modifier.padding(bottom = 8.dp)
                         )
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
-            // Main Actions: Face to Face, Live Session Buttons
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                GlassButton(
-                    text = "Face to Face",
-                    onClick = { viewModel.setActiveScreen(ActiveScreen.FACE_TO_FACE) },
-                    modifier = Modifier.weight(1f),
-                    leadingIcon = Icons.Default.SwapHoriz,
-                    gradientColors = listOf(Color(0xFF8B5CF6), Color(0xFF6D28D9))
-                )
+            // Central Translation Services Quick Launcher
+            Text(
+                text = "TRANSLATION SERVICES",
+                color = TextGlassMuted,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 1.sp
+            )
 
-                GlassButton(
-                    text = "Live",
-                    onClick = { viewModel.startNewLiveSession() },
-                    modifier = Modifier.weight(1f),
-                    leadingIcon = Icons.Default.Mic,
-                    gradientColors = listOf(NeonCyan, Color(0xFF0066FF))
-                )
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                // Row 1: Live Translation & Conversation Mode
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    GlassButton(
+                        text = "Live Session",
+                        onClick = { viewModel.startNewLiveSession() },
+                        modifier = Modifier.weight(1f),
+                        leadingIcon = Icons.Default.Mic,
+                        gradientColors = listOf(NeonCyan, Color(0xFF0066FF))
+                    )
+
+                    GlassButton(
+                        text = "Conversation",
+                        onClick = { viewModel.setActiveScreen(ActiveScreen.FACE_TO_FACE) },
+                        modifier = Modifier.weight(1f),
+                        leadingIcon = Icons.Default.SwapHoriz,
+                        gradientColors = listOf(Color(0xFF8B5CF6), Color(0xFF6D28D9))
+                    )
+                }
+
+                // Row 2: Language Learning & Offline Model Packs
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    GlassButton(
+                        text = "Learn & Practice",
+                        onClick = { viewModel.setActiveScreen(ActiveScreen.LANGUAGE_LEARNING) },
+                        modifier = Modifier.weight(1f),
+                        leadingIcon = Icons.Default.School,
+                        gradientColors = listOf(NeonEmerald, Color(0xFF059669))
+                    )
+
+                    GlassButton(
+                        text = "Offline Packs",
+                        onClick = { viewModel.setActiveScreen(ActiveScreen.LANGUAGE_PACKS) },
+                        modifier = Modifier.weight(1f),
+                        leadingIcon = Icons.Default.Language,
+                        gradientColors = listOf(Color(0xFF3B82F6), Color(0xFF1D4ED8))
+                    )
+                }
             }
         }
+    }
+
+    // Dictation speech input dialog
+    if (showDictationDialog) {
+        QuickSpeechInputDialog(
+            onDismiss = { showDictationDialog = false },
+            onTextSubmitted = { text, _ ->
+                viewModel.setHomeInputText(text)
+                showDictationDialog = false
+            }
+        )
     }
 
     // Modal Sheet for Selecting Language
@@ -309,28 +447,6 @@ fun TranslateHomeScreen(viewModel: TranslationViewModel) {
             onDismiss = {
                 viewModel.showLanguageSheet.value = false
             }
-        )
-    }
-}
-
-@Composable
-fun IconButtonWithRipple(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    contentDescription: String,
-    onClick: () -> Unit
-) {
-    Box(
-        modifier = Modifier
-            .size(36.dp)
-            .clip(CircleShape)
-            .clickable(onClick = onClick),
-        contentAlignment = Alignment.Center
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = contentDescription,
-            tint = TextGlassMuted,
-            modifier = Modifier.size(20.dp)
         )
     }
 }

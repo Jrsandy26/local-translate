@@ -16,5 +16,7 @@ enum class ActiveScreen {
     LIVE_SESSION,
     FACE_TO_FACE,
     HISTORY,
-    LANGUAGE_PACKS
+    LANGUAGE_PACKS,
+    LANGUAGE_LEARNING,
+    SETTINGS
 }

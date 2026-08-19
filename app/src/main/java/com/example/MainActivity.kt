@@ -21,6 +21,7 @@ import androidx.core.content.ContextCompat
 import com.example.model.ActiveScreen
 import com.example.ui.screens.FaceToFaceScreen
 import com.example.ui.screens.HistoryScreen
+import com.example.ui.screens.LanguageLearningScreen
 import com.example.ui.screens.LanguagePacksScreen
 import com.example.ui.screens.LiveTranslationScreen
 import com.example.ui.screens.TranslateHomeScreen
@@ -68,6 +69,8 @@ class MainActivity : ComponentActivity() {
                             ActiveScreen.FACE_TO_FACE -> FaceToFaceScreen(viewModel = viewModel)
                             ActiveScreen.HISTORY -> HistoryScreen(viewModel = viewModel)
                             ActiveScreen.LANGUAGE_PACKS -> LanguagePacksScreen(viewModel = viewModel)
+                            ActiveScreen.LANGUAGE_LEARNING -> LanguageLearningScreen(viewModel = viewModel)
+                            ActiveScreen.SETTINGS -> com.example.ui.screens.SettingsScreen(viewModel = viewModel)
                         }
                     }
                 }
