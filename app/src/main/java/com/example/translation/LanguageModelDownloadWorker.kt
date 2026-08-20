@@ -2,8 +2,10 @@ package com.example.translation
 
 import android.content.Context
 import android.util.Log
+import androidx.work.Constraints
 import androidx.work.CoroutineWorker
 import androidx.work.Data
+import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
@@ -49,8 +51,14 @@ class LanguageModelDownloadWorker(
                 .putString(KEY_LANG_CODE, langCode)
                 .build()
 
+            val constraints = Constraints.Builder()
+                .setRequiredNetworkType(NetworkType.CONNECTED)
+                .setRequiresBatteryNotLow(true)
+                .build()
+
             val workRequest = OneTimeWorkRequestBuilder<LanguageModelDownloadWorker>()
                 .setInputData(data)
+                .setConstraints(constraints)
                 .build()
 
             WorkManager.getInstance(context).enqueue(workRequest)

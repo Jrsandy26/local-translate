@@ -3,6 +3,7 @@ package com.example.ui.components
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.os.PowerManager
 import android.widget.Toast
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
@@ -756,39 +757,59 @@ private fun DynamicWaveformVisualizer(
     isPlaying: Boolean,
     modifier: Modifier = Modifier
 ) {
-    val infiniteTransition = rememberInfiniteTransition(label = "waveform_anim")
-    val b1 by infiniteTransition.animateFloat(
-        initialValue = 0.25f,
-        targetValue = 0.95f,
-        animationSpec = infiniteRepeatable(animation = tween(450, easing = LinearEasing), repeatMode = RepeatMode.Reverse),
-        label = "b1"
-    )
-    val b2 by infiniteTransition.animateFloat(
-        initialValue = 0.75f,
-        targetValue = 0.30f,
-        animationSpec = infiniteRepeatable(animation = tween(380, easing = LinearEasing), repeatMode = RepeatMode.Reverse),
-        label = "b2"
-    )
-    val b3 by infiniteTransition.animateFloat(
-        initialValue = 0.15f,
-        targetValue = 0.90f,
-        animationSpec = infiniteRepeatable(animation = tween(520, easing = LinearEasing), repeatMode = RepeatMode.Reverse),
-        label = "b3"
-    )
-    val b4 by infiniteTransition.animateFloat(
-        initialValue = 0.85f,
-        targetValue = 0.20f,
-        animationSpec = infiniteRepeatable(animation = tween(320, easing = LinearEasing), repeatMode = RepeatMode.Reverse),
-        label = "b4"
-    )
-    val b5 by infiniteTransition.animateFloat(
-        initialValue = 0.35f,
-        targetValue = 1.0f,
-        animationSpec = infiniteRepeatable(animation = tween(410, easing = LinearEasing), repeatMode = RepeatMode.Reverse),
-        label = "b5"
-    )
+    val context = LocalContext.current
+    val isPowerSaveMode = remember {
+        val pm = context.getSystemService(Context.POWER_SERVICE) as? PowerManager
+        pm?.isPowerSaveMode ?: false
+    }
 
-    val heights = listOf(b1, b2, b3, b4, b5)
+    val heights = if (isPlaying && !isPowerSaveMode) {
+        val infiniteTransition = rememberInfiniteTransition(label = "waveform_anim")
+        val b1 by infiniteTransition.animateFloat(
+            initialValue = 0.25f,
+            targetValue = 0.95f,
+            animationSpec = infiniteRepeatable(animation = tween(450, easing = LinearEasing), repeatMode = RepeatMode.Reverse),
+            label = "b1"
+        )
+        val b2 by infiniteTransition.animateFloat(
+            initialValue = 0.75f,
+            targetValue = 0.30f,
+            animationSpec = infiniteRepeatable(animation = tween(380, easing = LinearEasing), repeatMode = RepeatMode.Reverse),
+            label = "b2"
+        )
+        val b3 by infiniteTransition.animateFloat(
+            initialValue = 0.15f,
+            targetValue = 0.90f,
+            animationSpec = infiniteRepeatable(animation = tween(520, easing = LinearEasing), repeatMode = RepeatMode.Reverse),
+            label = "b3"
+        )
+        val b4 by infiniteTransition.animateFloat(
+            initialValue = 0.85f,
+            targetValue = 0.20f,
+            animationSpec = infiniteRepeatable(animation = tween(320, easing = LinearEasing), repeatMode = RepeatMode.Reverse),
+            label = "b4"
+        )
+        val b5 by infiniteTransition.animateFloat(
+            initialValue = 0.35f,
+            targetValue = 1.0f,
+            animationSpec = infiniteRepeatable(animation = tween(410, easing = LinearEasing), repeatMode = RepeatMode.Reverse),
+            label = "b5"
+        )
+        listOf(b1, b2, b3, b4, b5)
+    } else if (isPlaying && isPowerSaveMode) {
+        // Under power saving mode / low-performance state, use a single slow pulsing animation
+        // to minimize recompositions and CPU rendering cost.
+        val infiniteTransition = rememberInfiniteTransition(label = "waveform_low_power")
+        val singlePulse by infiniteTransition.animateFloat(
+            initialValue = 0.4f,
+            targetValue = 0.8f,
+            animationSpec = infiniteRepeatable(animation = tween(1200, easing = LinearEasing), repeatMode = RepeatMode.Reverse),
+            label = "pulse"
+        )
+        listOf(singlePulse * 0.7f, singlePulse * 1.1f, singlePulse * 0.8f, singlePulse * 1.2f, singlePulse * 0.9f)
+    } else {
+        listOf(0.15f, 0.15f, 0.15f, 0.15f, 0.15f)
+    }
 
     Row(
         modifier = modifier.height(20.dp),
