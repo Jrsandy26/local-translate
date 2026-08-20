@@ -1,46 +1,47 @@
-# Production Setup Plan - Riva Translate
+# Implementation Plan - Translation Robustness & Language Expansion
 
-This plan outlines the steps to prepare the **Riva Translate** application for production deployment. This involves finalizing identification, optimizing the build process, and ensuring security best practices for the release artifact.
+This plan addresses translation stability, adds new Indian languages, and fixes performance issues in the Languages screen.
 
 ## User Review Required
 
 > [!IMPORTANT]
-> **Package Name Change**: I will be refactoring `com.example` to `com.rivatranslate`. This is a breaking change for local data (Room database) if you have already deployed the app to a device.
-> **Signing Credentials**: I will set up a template for release signing. You will need to provide the actual keystore file and passwords later.
+> **Performance Fix**: The "Language Packs" screen scrolling lag will be fixed by optimizing how the list items are rendered and tracked.
+> **Language Expansion**: I am adding **Telugu**, **Kannada**, and **Malayalam** to the supported offline languages.
 
 ## Proposed Changes
 
-### 1. Identity & Naming
-- **Refactor Namespace**: Change `com.example` to `com.rivatranslate` across the entire project.
-- **Update Application ID**: Change `com.aistudio.rivatranslate.bcznqd` to `com.rivatranslate.app`.
-- **Debug Suffix**: Add `.debug` suffix to the `applicationId` for debug builds to allow side-by-side installation.
+### 1. Translation Robustness
 
-### 2. Build Configuration
-#### [MODIFY] [app/build.gradle.kts](file:///C:/Users/sande/AndroidStudioProjects/local-translate/app/build.gradle.kts)
-- Define a `signingConfigs` block for `release`.
-- Use a `secrets.properties` or `keystore.properties` approach to avoid hardcoding sensitive info.
-- Finalize `versionCode` and `versionName`.
+#### [MODIFY] [GoogleTranslationEngine.kt](file:///C:/Users/sande/AndroidStudioProjects/local-translate/app/src/main/java/com/rivatranslate/translation/GoogleTranslationEngine.kt)
+- **Fix Broken Dictionary**: Correct the malformed Spanish entry for "where is the train station".
+- **Enhanced Translator Lifecycle**: Limit the number of active translators in memory to prevent crashes on low-end devices.
+- **Improved Fallback**: Ensure the smart fallback logic handles the new Indian languages.
 
-#### [NEW] [keystore.properties.template](file:///C:/Users/sande/AndroidStudioProjects/local-translate/keystore.properties.template)
-- Create a template file for the user to fill in their release keystore details.
+### 2. Language Expansion
 
-### 3. Proguard & R8 Optimization
-#### [MODIFY] [app/proguard-rules.pro](file:///C:/Users/sande/AndroidStudioProjects/local-translate/app/proguard-rules.pro)
-- Refine existing rules for ML Kit and Room to ensure maximum shrinking without breaking functionality.
+#### [MODIFY] [Language.kt](file:///C:/Users/sande/AndroidStudioProjects/local-translate/app/src/main/java/com/rivatranslate/model/Language.kt)
+- Add entries for **Telugu** (`te`), **Kannada** (`kn`), and **Malayalam** (`ml`).
 
-### 4. Manifest & Resources
-#### [MODIFY] [app/src/main/AndroidManifest.xml](file:///C:/Users/sande/AndroidStudioProjects/local-translate/app/src/main/AndroidManifest.xml)
-- Review `android:allowBackup` and `android:fullBackupContent` for data privacy.
-- Ensure all permissions are strictly necessary.
+#### [MODIFY] [GoogleTranslationEngine.kt](file:///C:/Users/sande/AndroidStudioProjects/local-translate/app/src/main/java/com/rivatranslate/translation/GoogleTranslationEngine.kt)
+- Update `mapLangCode` to include `te`, `kn`, and `ml` mapping to ML Kit constants.
 
----
+### 3. UI Optimization (Fix Lag)
+
+#### [MODIFY] [LanguagesScreen.kt](file:///C:/Users/sande/AndroidStudioProjects/local-translate/app/src/main/java/com/rivatranslate/ui/screens/LanguagesScreen.kt)
+- **Lazy List Optimization**: Add `key` to `items()` in the `LazyColumn` for efficient re-ordering and rendering.
+- **State Optimization**: Use `rememberDerivedStateOf` or move the download state management to the ViewModel to reduce unnecessary recompositions while scrolling.
+- **Async Loading**: Improve the initial loading of "isDownloaded" states to be more efficient.
+
+### 4. Translation Feedback
+
+#### [MODIFY] [TranslateHomeScreen.kt](file:///C:/Users/sande/AndroidStudioProjects/local-translate/app/src/main/java/com/rivatranslate/ui/screens/TranslateHomeScreen.kt)
+- **Loading Indicator**: Show a subtle `LinearProgressIndicator` when a translation is in progress.
+- **Model Status**: If a translation is delayed due to a model download, display a temporary status message like "Downloading language pack...".
 
 ## Verification Plan
 
-### Automated Tests
-- Run `./gradlew assembleRelease` to ensure the build completes successfully with R8 enabled.
-- Verify the generated APK's package name and versioning.
-
 ### Manual Verification
-- Install the release build on a device/emulator and verify that ML Kit translation and Room database operations work correctly with obfuscation enabled.
-- Check if the debug and release builds can coexist on the same device.
+1.  **Scrolling Performance**: Navigate to "Language Packs" and scroll rapidly. Verify the lag is gone.
+2.  **New Languages**: Verify that Telugu, Kannada, and Malayalam appear in the list and can be downloaded.
+3.  **Robustness**: Verify that "where is the train station" translates correctly to Spanish.
+4.  **Feedback**: Verify the loading indicator appears when typing a sentence to translate.
