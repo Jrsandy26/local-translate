@@ -44,36 +44,43 @@ An offline-first Android translation application built with **Jetpack Compose**,
 
 ---
 
-## 📱 App Structure
+## 📱 Project Architecture & Module Structure
 
 ```
-com.example/
-├── audio/                   # Audio recording, playback, TTS, and SpeechRecognition helpers
-│   ├── AudioPlaybackHelper.kt
-│   ├── AudioRecorderHelper.kt
-│   ├── SpeechRecognitionHelper.kt
-│   └── TextToSpeechHelper.kt
-├── data/                    # Room Database, DAOs, and Entities
-│   └── db/
-│       ├── AppDatabase.kt
-│       └── TranslationDao.kt
-├── model/                   # Domain data models & Enums
-│   ├── ActiveScreen.kt
-│   ├── AppThemeMode.kt
-│   ├── Language.kt
-│   └── TranslationSession.kt
-├── service/                 # Foreground Live Translation service & notification manager
-│   ├── LiveSessionManager.kt
-│   ├── LiveTranslationService.kt
-│   └── WaveformBitmapGenerator.kt
-├── translation/             # Offline translation engine & background download worker
-│   ├── GoogleTranslationEngine.kt
-│   ├── LanguageModelDownloadWorker.kt
-│   └── OfflineTranslationManager.kt
-└── ui/                      # Jetpack Compose Screens, Components, and Theming
-    ├── components/          # Reusable UI widgets, dialogs, pills, and cards
-    ├── screens/             # Primary app destinations (Home, Live, Conversation, Languages, History, Profile)
-    └── theme/               # Centralized M3 ColorSchemes, dynamic palettes, and Typography
+app/src/main/
+├── java/com/example/        # Kotlin Application Source
+│   ├── audio/               # Audio recording, waveform capture, TTS, and SpeechRecognition
+│   │   ├── AudioPlaybackHelper.kt
+│   │   ├── AudioRecorderHelper.kt
+│   │   ├── SpeechRecognitionHelper.kt
+│   │   └── TextToSpeechHelper.kt
+│   ├── data/                # Local Room Database, DAOs, and Repositories
+│   │   └── db/
+│   │       ├── AppDatabase.kt
+│   │       └── TranslationDao.kt
+│   ├── model/               # Domain entities, session records, and language models
+│   │   ├── ActiveScreen.kt
+│   │   ├── AppThemeMode.kt
+│   │   ├── Language.kt
+│   │   └── TranslationSession.kt
+│   ├── service/             # Background foreground service & notification system
+│   │   ├── LiveSessionManager.kt
+│   │   ├── LiveTranslationService.kt
+│   │   └── WaveformBitmapGenerator.kt
+│   ├── translation/         # Offline neural translation engine & download worker
+│   │   ├── GoogleTranslationEngine.kt
+│   │   ├── LanguageModelDownloadWorker.kt
+│   │   └── OfflineTranslationManager.kt
+│   └── ui/                  # Jetpack Compose UI Layer
+│       ├── components/      # Reusable cards, dialogs, pills, and audio visualizers
+│       ├── screens/         # Home, Live Translate, Conversation, Languages, History, Profile
+│       ├── theme/           # Dynamic Material 3 ColorSchemes, dark/light palettes, Typography
+│       └── viewmodel/       # State management, coroutines, and preferences
+└── res/                     # Android Vector Drawables, Layouts, Values, and Icons
+    ├── drawable/            # Vector graphics, notification icons, adaptive artwork
+    ├── layout/              # Custom notification layouts
+    ├── mipmap-anydpi-v26/   # Adaptive launcher icon configurations
+    └── values/              # Strings, theme definitions, and color constants
 ```
 
 ---
