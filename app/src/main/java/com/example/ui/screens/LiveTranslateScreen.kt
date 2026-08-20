@@ -206,14 +206,13 @@ fun LiveTranslateScreen(
                 timerSeconds = timerSeconds,
                 isPaused = isSessionPaused,
                 onStopClick = { viewModel.stopLiveSession() },
-                onPauseClick = {
+                onPauseToggleClick = {
                     if (isSessionPaused) {
                         viewModel.resumeLiveSession()
                     } else {
                         viewModel.pauseLiveSession()
                     }
-                },
-                onResumeClick = { viewModel.resumeLiveSession() }
+                }
             )
         } else {
             Spacer(modifier = Modifier.height(16.dp).navigationBarsPadding())
@@ -706,8 +705,7 @@ private fun ActiveBottomControls(
     timerSeconds: Int,
     isPaused: Boolean,
     onStopClick: () -> Unit,
-    onPauseClick: () -> Unit,
-    onResumeClick: () -> Unit
+    onPauseToggleClick: () -> Unit
 ) {
     Card(
         shape = RoundedCornerShape(32.dp),
@@ -720,46 +718,48 @@ private fun ActiveBottomControls(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = 16.dp, bottom = 18.dp, start = 16.dp, end = 16.dp),
+                .padding(top = 16.dp, bottom = 18.dp, start = 24.dp, end = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Timer Row (Red Dot + mm:ss)
+            // Timer Row (Live / Paused Indicator + mm:ss)
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.Center
             ) {
                 Box(
                     modifier = Modifier
-                        .size(7.dp)
+                        .size(8.dp)
                         .clip(CircleShape)
                         .background(if (isPaused) Color(0xFF9E9E9E) else LiveRed)
                 )
-                Spacer(modifier = Modifier.width(6.dp))
+                Spacer(modifier = Modifier.width(8.dp))
                 val minutes = timerSeconds / 60
                 val seconds = timerSeconds % 60
                 Text(
                     text = String.format("%02d:%02d", minutes, seconds),
-                    fontSize = 15.sp,
+                    fontSize = 16.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = DarkBrownText
                 )
             }
 
-            Spacer(modifier = Modifier.height(18.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
-            // 3 Control Buttons: Stop, Pause/Play, Resume
+            // 2 Action Buttons: Stop and Play/Pause Toggle
             Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceEvenly,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp),
+                horizontalArrangement = Arrangement.SpaceAround,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // 1. Stop Button
+                // 1. Stop Action Button
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Box(
                         modifier = Modifier
-                            .size(64.dp)
+                            .size(68.dp)
                             .clip(CircleShape)
                             .background(ControlCircleBg)
                             .clickable { onStopClick() }
@@ -768,21 +768,21 @@ private fun ActiveBottomControls(
                     ) {
                         Box(
                             modifier = Modifier
-                                .size(20.dp)
-                                .clip(RoundedCornerShape(3.dp))
+                                .size(22.dp)
+                                .clip(RoundedCornerShape(4.dp))
                                 .background(StopRed)
                         )
                     }
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
                         text = "Stop",
-                        fontSize = 13.sp,
+                        fontSize = 14.sp,
                         fontWeight = FontWeight.Medium,
                         color = DarkBrownText
                     )
                 }
 
-                // 2. Pause / Play Button (Center Big)
+                // 2. Play / Pause Dual Action Button
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
@@ -791,8 +791,8 @@ private fun ActiveBottomControls(
                             .size(76.dp)
                             .clip(CircleShape)
                             .background(WarmOrangeLight)
-                            .clickable { onPauseClick() }
-                            .padding(4.dp)
+                            .clickable { onPauseToggleClick() }
+                            .padding(5.dp)
                             .testTag("live_pause_button"),
                         contentAlignment = Alignment.Center
                     ) {
@@ -807,43 +807,14 @@ private fun ActiveBottomControls(
                                 imageVector = if (isPaused) Icons.Default.PlayArrow else Icons.Default.Pause,
                                 contentDescription = if (isPaused) "Resume" else "Pause",
                                 tint = Color.White,
-                                modifier = Modifier.size(32.dp)
+                                modifier = Modifier.size(34.dp)
                             )
                         }
                     }
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
                         text = if (isPaused) "Resume" else "Pause",
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = DarkBrownText
-                    )
-                }
-
-                // 3. Resume Button
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(64.dp)
-                            .clip(CircleShape)
-                            .background(ControlCircleBg)
-                            .clickable { onResumeClick() }
-                            .testTag("live_resume_button"),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.PlayArrow,
-                            contentDescription = "Resume",
-                            tint = if (isPaused) WarmOrange else Color(0xFFB5A496),
-                            modifier = Modifier.size(24.dp)
-                        )
-                    }
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Text(
-                        text = "Resume",
-                        fontSize = 13.sp,
+                        fontSize = 14.sp,
                         fontWeight = FontWeight.Medium,
                         color = DarkBrownText
                     )

@@ -11,6 +11,7 @@ class AudioRecorderHelper(private val context: Context) {
     private var mediaRecorder: MediaRecorder? = null
     private var currentOutputFile: String? = null
     private var isRecording = false
+    private var isPaused = false
 
     fun startRecording(): String? {
         try {
@@ -39,32 +40,38 @@ class AudioRecorderHelper(private val context: Context) {
 
             mediaRecorder = recorder
             isRecording = true
+            isPaused = false
             Log.d("AudioRecorder", "Recording started: ${outputFile.absolutePath}")
             return currentOutputFile
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             Log.e("AudioRecorder", "Failed to start audio recording", e)
-            mediaRecorder?.release()
+            try {
+                mediaRecorder?.release()
+            } catch (_: Throwable) {}
             mediaRecorder = null
             isRecording = false
+            isPaused = false
             return null
         }
     }
 
     fun pauseRecording() {
-        if (isRecording && Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+        if (isRecording && !isPaused && mediaRecorder != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
             try {
                 mediaRecorder?.pause()
-            } catch (e: Exception) {
+                isPaused = true
+            } catch (e: Throwable) {
                 Log.e("AudioRecorder", "Error pausing recorder", e)
             }
         }
     }
 
     fun resumeRecording() {
-        if (isRecording && Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+        if (isRecording && isPaused && mediaRecorder != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
             try {
                 mediaRecorder?.resume()
-            } catch (e: Exception) {
+                isPaused = false
+            } catch (e: Throwable) {
                 Log.e("AudioRecorder", "Error resuming recorder", e)
             }
         }
@@ -75,19 +82,23 @@ class AudioRecorderHelper(private val context: Context) {
             try {
                 mediaRecorder?.stop()
                 mediaRecorder?.release()
-            } catch (e: Exception) {
+            } catch (e: Throwable) {
                 Log.e("AudioRecorder", "Error stopping recorder", e)
             } finally {
                 mediaRecorder = null
                 isRecording = false
+                isPaused = false
             }
             val recordedPath = currentOutputFile
             Log.d("AudioRecorder", "Recording stopped: $recordedPath")
             return recordedPath
         }
-        mediaRecorder?.release()
+        try {
+            mediaRecorder?.release()
+        } catch (_: Throwable) {}
         mediaRecorder = null
         isRecording = false
+        isPaused = false
         return currentOutputFile
     }
 }

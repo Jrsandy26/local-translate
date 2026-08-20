@@ -23,6 +23,7 @@ class SpeechRecognitionHelper(
     private var speechRecognizer: SpeechRecognizer? = null
     private var isListening = false
     var continuousMode = false
+    private var isPaused = false
     private var currentLocale: Locale = Locale.getDefault()
     private var restartRunnable: Runnable? = null
 
@@ -30,6 +31,7 @@ class SpeechRecognitionHelper(
 
     fun startListening(locale: Locale = Locale.getDefault()) {
         currentLocale = locale
+        isPaused = false
         cancelRestart()
         mainHandler.post {
             try {
@@ -49,21 +51,44 @@ class SpeechRecognitionHelper(
                 speechRecognizer?.startListening(intent)
                 isListening = true
                 this@SpeechRecognitionHelper.onListeningStateChanged(true)
-            } catch (e: Exception) {
+            } catch (e: Throwable) {
                 Log.e("SpeechRecognition", "Error starting speech recognizer", e)
+                isListening = false
                 this@SpeechRecognitionHelper.onListeningStateChanged(false)
             }
         }
     }
 
+    fun pauseListening() {
+        isPaused = true
+        cancelRestart()
+        mainHandler.post {
+            try {
+                speechRecognizer?.cancel()
+            } catch (e: Throwable) {
+                Log.e("SpeechRecognition", "Error pausing speech recognizer", e)
+            }
+            isListening = false
+            this@SpeechRecognitionHelper.onListeningStateChanged(false)
+        }
+    }
+
+    fun resumeListening(locale: Locale = currentLocale) {
+        if (!isPaused && isListening) return
+        isPaused = false
+        continuousMode = true
+        startListening(locale)
+    }
+
     fun stopListening() {
         continuousMode = false
+        isPaused = false
         cancelRestart()
         mainHandler.post {
             try {
                 speechRecognizer?.stopListening()
                 speechRecognizer?.cancel()
-            } catch (e: Exception) {
+            } catch (e: Throwable) {
                 Log.e("SpeechRecognition", "Error stopping listening", e)
             }
             isListening = false
@@ -73,12 +98,13 @@ class SpeechRecognitionHelper(
 
     fun destroy() {
         continuousMode = false
+        isPaused = false
         cancelRestart()
         mainHandler.post {
             try {
                 speechRecognizer?.destroy()
                 speechRecognizer = null
-            } catch (e: Exception) {
+            } catch (e: Throwable) {
                 Log.e("SpeechRecognition", "Error destroying speech recognizer", e)
             }
             isListening = false
@@ -91,20 +117,20 @@ class SpeechRecognitionHelper(
         restartRunnable = null
     }
 
-    private fun scheduleRestart() {
-        if (!continuousMode) return
+    private fun scheduleRestart(delayMs: Long = 400) {
+        if (!continuousMode || isPaused) return
         cancelRestart()
         restartRunnable = Runnable {
-            if (continuousMode) {
+            if (continuousMode && !isPaused) {
                 try {
                     speechRecognizer?.cancel()
                     startListening(currentLocale)
-                } catch (e: Exception) {
+                } catch (e: Throwable) {
                     Log.e("SpeechRecognition", "Error restarting recognizer", e)
                 }
             }
         }
-        mainHandler.postDelayed(restartRunnable!!, 300)
+        mainHandler.postDelayed(restartRunnable!!, delayMs)
     }
 
     private fun createListener(): RecognitionListener {
@@ -130,11 +156,27 @@ class SpeechRecognitionHelper(
             override fun onEndOfSpeech() {}
 
             override fun onError(error: Int) {
-                Log.w("SpeechRecognition", "Recognition error: $error")
-                this@SpeechRecognitionHelper.onListeningStateChanged.invoke(false)
-                isListening = false
-                if (continuousMode) {
-                    scheduleRestart()
+                Log.d("SpeechRecognition", "Recognition code: $error")
+                // Only notify inactive state if not in continuous mode or if paused
+                if (!continuousMode || isPaused) {
+                    this@SpeechRecognitionHelper.onListeningStateChanged.invoke(false)
+                    isListening = false
+                }
+                if (continuousMode && !isPaused) {
+                    // For speech timeouts or client busy, restart with safe debounce
+                    val delay = when (error) {
+                        SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> 800L
+                        SpeechRecognizer.ERROR_SPEECH_TIMEOUT, SpeechRecognizer.ERROR_NO_MATCH -> 400L
+                        else -> 600L
+                    }
+                    // Recreate recognizer if client became corrupted
+                    if (error == SpeechRecognizer.ERROR_CLIENT || error == SpeechRecognizer.ERROR_RECOGNIZER_BUSY) {
+                        try {
+                            speechRecognizer?.destroy()
+                            speechRecognizer = null
+                        } catch (_: Throwable) {}
+                    }
+                    scheduleRestart(delay)
                 }
             }
 
@@ -144,10 +186,11 @@ class SpeechRecognitionHelper(
                 if (finalResult.isNotBlank()) {
                     this@SpeechRecognitionHelper.onFinalSpeechResult.invoke(finalResult)
                 }
-                this@SpeechRecognitionHelper.onListeningStateChanged.invoke(false)
-                isListening = false
-                if (continuousMode) {
-                    scheduleRestart()
+                if (!continuousMode || isPaused) {
+                    this@SpeechRecognitionHelper.onListeningStateChanged.invoke(false)
+                    isListening = false
+                } else {
+                    scheduleRestart(300)
                 }
             }
 

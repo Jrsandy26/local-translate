@@ -27,6 +27,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -67,6 +68,7 @@ fun ExportSessionDialog(
     val previewText = remember(selectedFormat, selectedSubtitleMode, segments) {
         when (selectedFormat) {
             ExportFormat.PDF -> "📄 PDF Document with styled header, language flags, metadata, and boxed transcript cards ready for export & printing."
+            ExportFormat.AUDIO -> "🎵 Audio Recording (.m4a AAC audio file from session microphone input)"
             ExportFormat.SRT -> TranslationExportHelper.generateSrt(segments, selectedSubtitleMode)
             ExportFormat.VTT -> TranslationExportHelper.generateVtt(session.title, segments, selectedSubtitleMode)
             ExportFormat.TXT -> TranslationExportHelper.generatePlainText(session, segments)
@@ -219,6 +221,7 @@ fun ExportSessionDialog(
                         Icon(
                             imageVector = when (selectedFormat) {
                                 ExportFormat.PDF -> Icons.Default.PictureAsPdf
+                                ExportFormat.AUDIO -> Icons.Default.Headphones
                                 ExportFormat.SRT, ExportFormat.VTT -> Icons.Default.Subtitles
                                 ExportFormat.TXT -> Icons.Default.Description
                                 ExportFormat.CSV -> Icons.Default.TableChart
@@ -251,7 +254,7 @@ fun ExportSessionDialog(
                         color = DarkBrown
                     )
 
-                    if (selectedFormat != ExportFormat.PDF) {
+                    if (selectedFormat != ExportFormat.PDF && selectedFormat != ExportFormat.AUDIO) {
                         TextButton(
                             onClick = {
                                 val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
@@ -282,7 +285,7 @@ fun ExportSessionDialog(
                         .fillMaxWidth()
                         .weight(1f)
                         .clip(RoundedCornerShape(14.dp))
-                        .background(if (selectedFormat == ExportFormat.PDF) Color(0xFFF9F7F3) else PreviewBg)
+                        .background(if (selectedFormat == ExportFormat.PDF || selectedFormat == ExportFormat.AUDIO) Color(0xFFF9F7F3) else PreviewBg)
                         .border(1.dp, Color(0xFFE2D6CA), RoundedCornerShape(14.dp))
                         .padding(12.dp)
                 ) {
@@ -350,6 +353,123 @@ fun ExportSessionDialog(
                                     color = SubtitleBrown,
                                     modifier = Modifier.padding(4.dp)
                                 )
+                            }
+                        }
+                    } else if (selectedFormat == ExportFormat.AUDIO) {
+                        val audioFile = session.audioFilePath?.let { java.io.File(it) }
+                        val fileExists = audioFile != null && audioFile.exists() && audioFile.length() > 0L
+                        val fileSizeKb = if (fileExists) (audioFile!!.length() / 1024) else 0L
+
+                        Column(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .verticalScroll(rememberScrollState()),
+                            verticalArrangement = Arrangement.spacedBy(10.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(56.dp)
+                                    .clip(CircleShape)
+                                    .background(WarmOrangeLight),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Audiotrack,
+                                    contentDescription = null,
+                                    tint = WarmOrange,
+                                    modifier = Modifier.size(32.dp)
+                                )
+                            }
+
+                            Text(
+                                text = "Session Audio Recording",
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = DarkBrown
+                            )
+
+                            if (fileExists) {
+                                Card(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                                    shape = RoundedCornerShape(12.dp)
+                                ) {
+                                    Column(
+                                        modifier = Modifier.padding(14.dp),
+                                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween
+                                        ) {
+                                            Text("Format:", fontSize = 12.sp, color = SubtitleBrown)
+                                            Text("MPEG-4 AAC (.m4a)", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = DarkBrown)
+                                        }
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween
+                                        ) {
+                                            Text("Duration:", fontSize = 12.sp, color = SubtitleBrown)
+                                            Text("${session.durationSeconds} seconds", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = DarkBrown)
+                                        }
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween
+                                        ) {
+                                            Text("File Size:", fontSize = 12.sp, color = SubtitleBrown)
+                                            Text("${fileSizeKb} KB", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = DarkBrown)
+                                        }
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween
+                                        ) {
+                                            Text("Quality:", fontSize = 12.sp, color = SubtitleBrown)
+                                            Text("128 kbps • 44.1 kHz", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = DarkBrown)
+                                        }
+                                    }
+                                }
+
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(Color(0xFFE8F5E9))
+                                        .padding(8.dp)
+                                ) {
+                                    Text(
+                                        text = "✓ Ready to share directly to WhatsApp, Drive, Files, Email, or other apps.",
+                                        fontSize = 11.5.sp,
+                                        color = Color(0xFF2E7D32),
+                                        textAlign = TextAlign.Center,
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+                                }
+                            } else {
+                                Card(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                                    shape = RoundedCornerShape(12.dp)
+                                ) {
+                                    Column(
+                                        modifier = Modifier.padding(14.dp),
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        Text(
+                                            text = "No Audio File Recorded",
+                                            fontSize = 14.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = DarkBrown
+                                        )
+                                        Text(
+                                            text = "Microphone audio recording was disabled or not saved for this session.\n\nYou can still export formatted PDF, SRT Subtitles, WebVTT, TXT, or CSV transcripts.",
+                                            fontSize = 12.sp,
+                                            color = SubtitleBrown,
+                                            textAlign = TextAlign.Center
+                                        )
+                                    }
+                                }
                             }
                         }
                     } else {
@@ -447,6 +567,7 @@ private fun FormatChip(
 ) {
     val icon: ImageVector = when (format) {
         ExportFormat.PDF -> Icons.Default.PictureAsPdf
+        ExportFormat.AUDIO -> Icons.Default.Headphones
         ExportFormat.SRT, ExportFormat.VTT -> Icons.Default.Subtitles
         ExportFormat.TXT -> Icons.Default.Description
         ExportFormat.CSV -> Icons.Default.TableChart

@@ -382,16 +382,15 @@ class TranslationViewModel(application: Application) : AndroidViewModel(applicat
         isLiveSessionPaused.value = true
         audioRecorderHelper.pauseRecording()
         LiveSessionManager.pauseService(getApplication())
-        speechHelper?.stopListening()
+        speechHelper?.pauseListening()
     }
 
     fun resumeLiveSession() {
         isLiveSessionPaused.value = false
         audioRecorderHelper.resumeRecording()
-        speechHelper?.continuousMode = true
         LiveSessionManager.resumeService(getApplication())
         val locale = Locale.forLanguageTag(_sourceLanguage.value.code)
-        speechHelper?.startListening(locale)
+        speechHelper?.resumeListening(locale)
     }
 
     fun stopLiveSession() {
@@ -408,33 +407,83 @@ class TranslationViewModel(application: Application) : AndroidViewModel(applicat
 
         LiveSessionManager.stopService(getApplication())
 
-        val currentSegs = liveSegments.value
         val sessionDuration = liveTimerSeconds.value
         val title = "${_sourceLanguage.value.name} → ${_targetLanguage.value.name}"
+        val currentPartial = livePartialText.value.trim()
+        val currentPartialTrans = livePartialTranslated.value.trim()
 
         viewModelScope.launch {
-            val savedId = if (currentSegs.isNotEmpty()) {
-                repository.saveCompletedSession(
-                    title = title,
-                    src = _sourceLanguage.value.code,
-                    tgt = _targetLanguage.value.code,
-                    durationSeconds = sessionDuration,
-                    audioPath = recordedPath,
-                    segments = currentSegs
+            var allSegs = liveSegments.value.toMutableList()
+
+            // 1. Flush any pending recognized speech if not yet added to segments
+            if (currentPartial.isNotBlank()) {
+                val translated = if (currentPartialTrans.isNotBlank()) {
+                    currentPartialTrans
+                } else {
+                    try {
+                        GoogleTranslationEngine.translate(
+                            currentPartial,
+                            _sourceLanguage.value.code,
+                            _targetLanguage.value.code
+                        )
+                    } catch (e: Exception) {
+                        currentPartial
+                    }
+                }
+
+                val finalSeg = TranscriptSegment(
+                    sessionId = 0,
+                    speaker = "Speaker ${_sourceLanguage.value.code.uppercase()}",
+                    sourceText = currentPartial,
+                    translatedText = translated,
+                    isSourceSpeaker = true
                 )
-            } else {
-                0L
+                allSegs.add(finalSeg)
+                liveSegments.value = allSegs
             }
+
+            livePartialText.value = ""
+            livePartialTranslated.value = ""
+
+            // 2. Persist session and segments to Room database
+            val duration = sessionDuration.coerceAtLeast(if (allSegs.isNotEmpty()) 1 else 0)
+            val savedId = repository.saveCompletedSession(
+                title = title,
+                src = _sourceLanguage.value.code,
+                tgt = _targetLanguage.value.code,
+                durationSeconds = duration,
+                audioPath = recordedPath,
+                segments = allSegs
+            )
+
+            // 3. Also insert segments to recent_translations so they appear in both History tabs
+            for (seg in allSegs) {
+                if (seg.sourceText.isNotBlank()) {
+                    try {
+                        repository.addRecentTranslation(
+                            source = seg.sourceText,
+                            translated = seg.translatedText,
+                            sourceLang = _sourceLanguage.value.code,
+                            targetLang = _targetLanguage.value.code
+                        )
+                    } catch (e: Exception) {
+                        Log.e("TranslationVM", "Error inserting recent translation", e)
+                    }
+                }
+            }
+
+            val savedSegments = allSegs.map { it.copy(sessionId = savedId) }
 
             completedSession.value = TranslationSession(
                 id = savedId,
                 title = title,
                 sourceLanguageCode = _sourceLanguage.value.code,
                 targetLanguageCode = _targetLanguage.value.code,
-                durationSeconds = sessionDuration,
-                audioFilePath = recordedPath
+                durationSeconds = duration,
+                audioFilePath = recordedPath,
+                createdAt = System.currentTimeMillis()
             )
-            completedSegments.value = currentSegs
+            completedSegments.value = savedSegments
             showSessionStoppedDialog.value = true
         }
     }
@@ -466,10 +515,12 @@ class TranslationViewModel(application: Application) : AndroidViewModel(applicat
                 },
                 onError = {
                     // Fallback to sequential TTS if audio file cannot be played
-                    playSequentialTts(segments, useTranslated = true, targetLangCode = targetLangCode)
+                    if (segments.isNotEmpty()) {
+                        playSequentialTts(segments, useTranslated = true, targetLangCode = targetLangCode)
+                    }
                 }
             )
-        } else {
+        } else if (segments.isNotEmpty()) {
             // Play sequential synchronized TTS speech
             playSequentialTts(segments, useTranslated = true, targetLangCode = targetLangCode)
         }
@@ -478,16 +529,24 @@ class TranslationViewModel(application: Application) : AndroidViewModel(applicat
     fun playSequentialTts(
         segments: List<TranscriptSegment>,
         useTranslated: Boolean,
-        targetLangCode: String = _targetLanguage.value.code
+        targetLangCode: String = _targetLanguage.value.code,
+        fallbackAudioPath: String? = null
     ) {
         stopAudioPlayback()
-        if (segments.isEmpty()) return
+        if (segments.isEmpty()) {
+            if (!fallbackAudioPath.isNullOrBlank() && java.io.File(fallbackAudioPath).exists()) {
+                playSessionAudio(fallbackAudioPath, segments, targetLangCode)
+            }
+            return
+        }
 
-        val totalSec = segments.size * 3
+        val totalSec = (segments.size * 3).coerceAtLeast(3)
+        val totalMs = totalSec * 1000
         audioPlaybackHelper.setSimulatedDuration(totalSec)
         audioPlaybackHelper.setPlayingState(true)
 
         sequentialTtsJob = viewModelScope.launch {
+            val segmentDurationMs = 3000
             for (index in segments.indices) {
                 if (!audioPlaybackHelper.isPlaying.value) break
                 val seg = segments[index]
@@ -495,13 +554,21 @@ class TranslationViewModel(application: Application) : AndroidViewModel(applicat
                 val textToSpeak = if (useTranslated) seg.translatedText else seg.sourceText
                 val langToSpeak = if (useTranslated) targetLangCode else _sourceLanguage.value.code
 
-                audioPlaybackHelper.updateProgressManually(index * 3000, totalSec * 1000)
                 speakText(textToSpeak, langToSpeak)
-                delay(3000)
+
+                // Smoothly update progress in 100ms ticks across the 3 seconds segment window
+                val segStartMs = index * segmentDurationMs
+                val steps = 30
+                for (step in 0 until steps) {
+                    if (!audioPlaybackHelper.isPlaying.value) break
+                    val currentMs = segStartMs + (step * 100)
+                    audioPlaybackHelper.updateProgressManually(currentMs, totalMs)
+                    delay(100)
+                }
             }
             audioPlaybackHelper.setActiveSegment(-1)
             audioPlaybackHelper.setPlayingState(false)
-            audioPlaybackHelper.updateProgressManually(totalSec * 1000, totalSec * 1000)
+            audioPlaybackHelper.updateProgressManually(totalMs, totalMs)
         }
     }
 

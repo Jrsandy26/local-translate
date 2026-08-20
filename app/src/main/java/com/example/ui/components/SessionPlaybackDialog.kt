@@ -33,6 +33,8 @@ import androidx.compose.ui.window.DialogProperties
 import com.example.model.TranscriptSegment
 import com.example.model.TranslationSession
 import com.example.ui.viewmodel.TranslationViewModel
+import com.example.util.TranslationExportHelper
+import java.io.File
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -148,6 +150,28 @@ fun SessionPlaybackDialog(
                     }
 
                     Row(verticalAlignment = Alignment.CenterVertically) {
+                        val hasAudioFile = !session.audioFilePath.isNullOrBlank() && File(session.audioFilePath).exists()
+                        if (hasAudioFile) {
+                            IconButton(
+                                onClick = {
+                                    TranslationExportHelper.shareAudioDirectly(context, session.audioFilePath, session.title)
+                                },
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clip(CircleShape)
+                                    .background(WarmOrangeLight)
+                                    .testTag("share_audio_button")
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Audiotrack,
+                                    contentDescription = "Share Audio Recording",
+                                    tint = WarmOrange,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(6.dp))
+                        }
+
                         IconButton(
                             onClick = { showExportDialog = true },
                             modifier = Modifier
@@ -182,7 +206,7 @@ fun SessionPlaybackDialog(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(14.dp))
+                Spacer(modifier = Modifier.height(12.dp))
 
                 // Audio Player Control Card
                 Card(
@@ -196,18 +220,38 @@ fun SessionPlaybackDialog(
                             .padding(14.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        // Title / Mode Row
+                        // Title / Mode / Waveform Row
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text(
-                                text = session.title,
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = DarkBrown
-                            )
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = session.title,
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = DarkBrown,
+                                    maxLines = 1
+                                )
+                                Text(
+                                    text = if (isAudioPlaying) {
+                                        if (playModeTranslated) "● Speaking Translation (TTS)" else "● Playing Audio Recording"
+                                    } else {
+                                        "Ready to Play"
+                                    },
+                                    fontSize = 11.sp,
+                                    color = if (isAudioPlaying) WarmOrange else SubtitleBrown,
+                                    fontWeight = if (isAudioPlaying) FontWeight.Bold else FontWeight.Normal
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.width(8.dp))
+
+                            // Animated Waveform
+                            DynamicWaveformVisualizer(isPlaying = isAudioPlaying)
+
+                            Spacer(modifier = Modifier.width(8.dp))
 
                             // Toggle Mode Chip
                             Row(
@@ -312,18 +356,42 @@ fun SessionPlaybackDialog(
                                         if (isAudioPlaying) {
                                             viewModel.pauseAudioPlayback()
                                         } else {
+                                            val audioFileExists = !session.audioFilePath.isNullOrBlank() && File(session.audioFilePath).exists()
                                             if (playModeTranslated) {
-                                                viewModel.playSequentialTts(
-                                                    segments = segments,
-                                                    useTranslated = true,
-                                                    targetLangCode = session.targetLanguageCode
-                                                )
+                                                if (segments.isNotEmpty()) {
+                                                    viewModel.playSequentialTts(
+                                                        segments = segments,
+                                                        useTranslated = true,
+                                                        targetLangCode = session.targetLanguageCode,
+                                                        fallbackAudioPath = session.audioFilePath
+                                                    )
+                                                } else if (audioFileExists) {
+                                                    Toast.makeText(context, "Playing recorded audio", Toast.LENGTH_SHORT).show()
+                                                    viewModel.playSessionAudio(
+                                                        audioPath = session.audioFilePath,
+                                                        segments = segments,
+                                                        targetLangCode = session.targetLanguageCode
+                                                    )
+                                                } else {
+                                                    Toast.makeText(context, "No speech transcript or audio file to play", Toast.LENGTH_SHORT).show()
+                                                }
                                             } else {
-                                                viewModel.playSessionAudio(
-                                                    audioPath = session.audioFilePath,
-                                                    segments = segments,
-                                                    targetLangCode = session.targetLanguageCode
-                                                )
+                                                if (audioFileExists) {
+                                                    viewModel.playSessionAudio(
+                                                        audioPath = session.audioFilePath,
+                                                        segments = segments,
+                                                        targetLangCode = session.targetLanguageCode
+                                                    )
+                                                } else if (segments.isNotEmpty()) {
+                                                    Toast.makeText(context, "No recorded audio found; playing TTS translation", Toast.LENGTH_SHORT).show()
+                                                    viewModel.playSequentialTts(
+                                                        segments = segments,
+                                                        useTranslated = true,
+                                                        targetLangCode = session.targetLanguageCode
+                                                    )
+                                                } else {
+                                                    Toast.makeText(context, "No audio recording found for this session", Toast.LENGTH_SHORT).show()
+                                                }
                                             }
                                         }
                                     }
@@ -351,18 +419,36 @@ fun SessionPlaybackDialog(
                             IconButton(
                                 onClick = {
                                     viewModel.stopAudioPlayback()
+                                    val audioFileExists = !session.audioFilePath.isNullOrBlank() && File(session.audioFilePath).exists()
                                     if (playModeTranslated) {
-                                        viewModel.playSequentialTts(
-                                            segments = segments,
-                                            useTranslated = true,
-                                            targetLangCode = session.targetLanguageCode
-                                        )
+                                        if (segments.isNotEmpty()) {
+                                            viewModel.playSequentialTts(
+                                                segments = segments,
+                                                useTranslated = true,
+                                                targetLangCode = session.targetLanguageCode,
+                                                fallbackAudioPath = session.audioFilePath
+                                            )
+                                        } else if (audioFileExists) {
+                                            viewModel.playSessionAudio(
+                                                audioPath = session.audioFilePath,
+                                                segments = segments,
+                                                targetLangCode = session.targetLanguageCode
+                                            )
+                                        }
                                     } else {
-                                        viewModel.playSessionAudio(
-                                            audioPath = session.audioFilePath,
-                                            segments = segments,
-                                            targetLangCode = session.targetLanguageCode
-                                        )
+                                        if (audioFileExists) {
+                                            viewModel.playSessionAudio(
+                                                audioPath = session.audioFilePath,
+                                                segments = segments,
+                                                targetLangCode = session.targetLanguageCode
+                                            )
+                                        } else if (segments.isNotEmpty()) {
+                                            viewModel.playSequentialTts(
+                                                segments = segments,
+                                                useTranslated = true,
+                                                targetLangCode = session.targetLanguageCode
+                                            )
+                                        }
                                     }
                                 },
                                 modifier = Modifier
@@ -397,6 +483,35 @@ fun SessionPlaybackDialog(
                     )
 
                     Row(verticalAlignment = Alignment.CenterVertically) {
+                        val hasAudioFile = !session.audioFilePath.isNullOrBlank() && File(session.audioFilePath).exists()
+                        if (hasAudioFile) {
+                            Row(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(WarmOrangeLight)
+                                    .clickable {
+                                        TranslationExportHelper.shareAudioDirectly(context, session.audioFilePath, session.title)
+                                    }
+                                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Audiotrack,
+                                    contentDescription = null,
+                                    tint = WarmOrange,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = "Share Audio",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = WarmOrange
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(6.dp))
+                        }
+
                         Row(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(8.dp))
@@ -413,7 +528,7 @@ fun SessionPlaybackDialog(
                             )
                             Spacer(modifier = Modifier.width(4.dp))
                             Text(
-                                text = "Export Subtitles",
+                                text = "Export",
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = DarkBrown
@@ -632,6 +747,63 @@ fun SessionPlaybackDialog(
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun DynamicWaveformVisualizer(
+    isPlaying: Boolean,
+    modifier: Modifier = Modifier
+) {
+    val infiniteTransition = rememberInfiniteTransition(label = "waveform_anim")
+    val b1 by infiniteTransition.animateFloat(
+        initialValue = 0.25f,
+        targetValue = 0.95f,
+        animationSpec = infiniteRepeatable(animation = tween(450, easing = LinearEasing), repeatMode = RepeatMode.Reverse),
+        label = "b1"
+    )
+    val b2 by infiniteTransition.animateFloat(
+        initialValue = 0.75f,
+        targetValue = 0.30f,
+        animationSpec = infiniteRepeatable(animation = tween(380, easing = LinearEasing), repeatMode = RepeatMode.Reverse),
+        label = "b2"
+    )
+    val b3 by infiniteTransition.animateFloat(
+        initialValue = 0.15f,
+        targetValue = 0.90f,
+        animationSpec = infiniteRepeatable(animation = tween(520, easing = LinearEasing), repeatMode = RepeatMode.Reverse),
+        label = "b3"
+    )
+    val b4 by infiniteTransition.animateFloat(
+        initialValue = 0.85f,
+        targetValue = 0.20f,
+        animationSpec = infiniteRepeatable(animation = tween(320, easing = LinearEasing), repeatMode = RepeatMode.Reverse),
+        label = "b4"
+    )
+    val b5 by infiniteTransition.animateFloat(
+        initialValue = 0.35f,
+        targetValue = 1.0f,
+        animationSpec = infiniteRepeatable(animation = tween(410, easing = LinearEasing), repeatMode = RepeatMode.Reverse),
+        label = "b5"
+    )
+
+    val heights = listOf(b1, b2, b3, b4, b5)
+
+    Row(
+        modifier = modifier.height(20.dp),
+        horizontalArrangement = Arrangement.spacedBy(2.5.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        heights.forEach { frac ->
+            val h = if (isPlaying) (frac * 20).dp.coerceAtLeast(3.dp) else 3.dp
+            Box(
+                modifier = Modifier
+                    .width(3.dp)
+                    .height(h)
+                    .clip(RoundedCornerShape(1.5.dp))
+                    .background(if (isPlaying) WarmOrange else SubtitleBrown.copy(alpha = 0.4f))
+            )
         }
     }
 }

@@ -40,8 +40,15 @@ class AudioPlaybackHelper(private val context: Context) {
             }
 
             val player = MediaPlayer().apply {
+                setAudioAttributes(
+                    android.media.AudioAttributes.Builder()
+                        .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SPEECH)
+                        .setUsage(android.media.AudioAttributes.USAGE_MEDIA)
+                        .build()
+                )
                 setDataSource(filePath)
                 prepare()
+                setVolume(1.0f, 1.0f)
                 setOnCompletionListener {
                     _isPlaying.value = false
                     _currentPositionMs.value = duration

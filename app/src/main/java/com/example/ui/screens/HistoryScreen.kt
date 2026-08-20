@@ -57,8 +57,8 @@ fun HistoryScreen(
     val activeDetailSession by viewModel.activeDetailSession.collectAsState()
     val activeDetailSegments by viewModel.activeDetailSegments.collectAsState()
 
-    var selectedTab by remember {
-        mutableStateOf(if (onlyFavorites) HistoryTab.FAVORITES else if (sessions.isNotEmpty()) HistoryTab.SESSIONS else HistoryTab.TRANSLATIONS)
+    var selectedTab by remember(onlyFavorites) {
+        mutableStateOf(if (onlyFavorites) HistoryTab.FAVORITES else HistoryTab.SESSIONS)
     }
 
     var exportSessionTarget by remember { mutableStateOf<TranslationSession?>(null) }

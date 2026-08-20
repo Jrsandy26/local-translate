@@ -26,6 +26,7 @@ import java.util.*
 
 enum class ExportFormat(val displayName: String, val extension: String, val mimeType: String, val description: String) {
     PDF("PDF Document", "pdf", "application/pdf", "Formatted printable document with visual styling"),
+    AUDIO("Audio Recording", "m4a", "audio/mp4", "Original recorded microphone audio file (.m4a) from this session"),
     SRT("SRT Subtitles", "srt", "application/x-subrip", "Standard video subtitle format for Premiere, VLC, YouTube"),
     VTT("WebVTT Subtitles", "vtt", "text/vtt", "Web subtitle format for HTML5 video players & online editors"),
     TXT("Plain Text", "txt", "text/plain", "Clean timestamped text transcript"),
@@ -418,6 +419,15 @@ object TranslationExportHelper {
             ExportFormat.PDF -> {
                 return generatePdf(context, session, segments)
             }
+            ExportFormat.AUDIO -> {
+                val audioSrc = session.audioFilePath?.let { File(it) }
+                if (audioSrc != null && audioSrc.exists() && audioSrc.length() > 0) {
+                    audioSrc.copyTo(file, overwrite = true)
+                } else {
+                    // Create an empty or placeholder audio marker if not present
+                    file.writeBytes(byteArrayOf())
+                }
+            }
             ExportFormat.SRT -> {
                 val content = generateSrt(segments, subtitleMode)
                 file.writeText(content)
@@ -436,6 +446,25 @@ object TranslationExportHelper {
             }
         }
         return file
+    }
+
+    /**
+     * Directly shares an audio file recording if it exists
+     */
+    fun shareAudioDirectly(context: Context, audioPath: String?, sessionTitle: String) {
+        if (audioPath.isNullOrBlank()) {
+            return
+        }
+        val audioFile = File(audioPath)
+        if (!audioFile.exists() || audioFile.length() == 0L) {
+            return
+        }
+        shareExportedFile(
+            context = context,
+            file = audioFile,
+            mimeType = "audio/mp4",
+            title = "Audio Recording: $sessionTitle"
+        )
     }
 
     /**

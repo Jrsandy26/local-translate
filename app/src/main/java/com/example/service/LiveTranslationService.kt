@@ -64,6 +64,7 @@ class LiveTranslationService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val action = intent?.action ?: ACTION_START
+        val fromNotif = intent?.getBooleanExtra("FROM_NOTIFICATION", false) ?: false
         when (action) {
             ACTION_START -> {
                 secondsElapsed = 0
@@ -81,13 +82,17 @@ class LiveTranslationService : Service() {
                 isCapturingSound = false
                 currentRms = 0f
                 LiveSessionManager.updateSessionState(running = true, paused = true)
-                LiveSessionManager.handleNotificationAction(ACTION_PAUSE)
+                if (fromNotif) {
+                    LiveSessionManager.handleNotificationAction(ACTION_PAUSE)
+                }
                 updateNotification()
             }
             ACTION_RESUME -> {
                 isPaused = false
                 LiveSessionManager.updateSessionState(running = true, paused = false)
-                LiveSessionManager.handleNotificationAction(ACTION_RESUME)
+                if (fromNotif) {
+                    LiveSessionManager.handleNotificationAction(ACTION_RESUME)
+                }
                 updateNotification()
                 startVisualizerLoop()
             }
@@ -95,7 +100,9 @@ class LiveTranslationService : Service() {
                 isPaused = false
                 isCapturingSound = false
                 LiveSessionManager.updateSessionState(running = false, paused = false)
-                LiveSessionManager.handleNotificationAction(ACTION_STOP)
+                if (fromNotif) {
+                    LiveSessionManager.handleNotificationAction(ACTION_STOP)
+                }
                 stopForegroundService()
             }
         }
@@ -210,6 +217,7 @@ class LiveTranslationService : Service() {
         val playPauseAction = if (isPaused) ACTION_RESUME else ACTION_PAUSE
         val playPauseIntent = Intent(this, LiveTranslationService::class.java).apply {
             this.action = playPauseAction
+            this.putExtra("FROM_NOTIFICATION", true)
         }
         val playPausePendingIntent = PendingIntent.getService(
             this,
@@ -229,6 +237,7 @@ class LiveTranslationService : Service() {
         // Stop Action PendingIntent
         val stopIntent = Intent(this, LiveTranslationService::class.java).apply {
             this.action = ACTION_STOP
+            this.putExtra("FROM_NOTIFICATION", true)
         }
         val stopPendingIntent = PendingIntent.getService(
             this,

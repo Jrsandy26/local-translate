@@ -1,7 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <paths xmlns:android="http://schemas.android.com/apk/res/android">
     <cache-path name="export_cache" path="exports/" />
+    <cache-path name="all_cache" path="." />
     <files-path name="export_files" path="exports/" />
+    <files-path name="audio_files" path="audio_recordings/" />
+    <files-path name="all_files" path="." />
     <external-files-path name="export_external_files" path="exports/" />
     <external-cache-path name="export_external_cache" path="exports/" />
 </paths>
