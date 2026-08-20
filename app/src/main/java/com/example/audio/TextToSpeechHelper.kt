@@ -6,81 +6,78 @@ import android.speech.tts.UtteranceProgressListener
 import android.util.Log
 import java.util.Locale
 
-class TextToSpeechHelper(context: Context) : TextToSpeech.OnInitListener {
-
-    private var tts: TextToSpeech? = TextToSpeech(context.applicationContext, this)
+class TextToSpeechHelper(context: Context) {
+    private var tts: TextToSpeech? = null
     private var isInitialized = false
-    var isSpeaking = false
-        private set
 
-    override fun onInit(status: Int) {
-        if (status == TextToSpeech.SUCCESS) {
-            isInitialized = true
-            tts?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
-                override fun onStart(utteranceId: String?) {
-                    isSpeaking = true
-                }
+    var speechRate: Float = 1.0f
+        set(value) {
+            field = value
+            tts?.setSpeechRate(value)
+        }
 
-                override fun onDone(utteranceId: String?) {
-                    isSpeaking = false
-                }
+    var pitch: Float = 1.0f
+        set(value) {
+            field = value
+            tts?.setPitch(value)
+        }
 
-                @Deprecated("Deprecated in Java")
-                override fun onError(utteranceId: String?) {
-                    isSpeaking = false
-                }
-            })
-        } else {
-            Log.e("TextToSpeechHelper", "TTS Initialization failed with status $status")
+    init {
+        tts = TextToSpeech(context.applicationContext) { status ->
+            if (status == TextToSpeech.SUCCESS) {
+                isInitialized = true
+                tts?.setSpeechRate(speechRate)
+                tts?.setPitch(pitch)
+            } else {
+                Log.e("TTSHelper", "TTS Initialization failed")
+            }
         }
     }
 
-    fun setSpeechRate(rate: Float) {
-        if (isInitialized) {
-            tts?.setSpeechRate(rate)
+    fun speak(text: String, langCode: String, onStart: () -> Unit = {}, onDone: () -> Unit = {}) {
+        if (!isInitialized || tts == null || text.isBlank()) return
+
+        val locale = when (langCode.lowercase()) {
+            "ja" -> Locale.JAPANESE
+            "es" -> Locale("es", "ES")
+            "fr" -> Locale.FRENCH
+            "de" -> Locale.GERMAN
+            "zh" -> Locale.CHINESE
+            "ko" -> Locale.KOREAN
+            "it" -> Locale.ITALIAN
+            "pt" -> Locale("pt", "BR")
+            "ru" -> Locale("ru", "RU")
+            "hi" -> Locale("hi", "IN")
+            "ar" -> Locale("ar", "SA")
+            else -> Locale.ENGLISH
         }
-    }
 
-    fun setPitch(pitch: Float) {
-        if (isInitialized) {
-            tts?.setPitch(pitch)
-        }
-    }
-
-    fun speak(text: String, locale: Locale, speedRate: Float = 1.0f, isFemaleVoice: Boolean = true, onStart: (() -> Unit)? = null, onDone: (() -> Unit)? = null) {
-        if (!isInitialized || tts == null) return
-
-        try {
-            tts?.setSpeechRate(speedRate)
-            tts?.setPitch(if (isFemaleVoice) 1.1f else 0.85f)
-
-            val result = tts?.setLanguage(locale)
-            if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
-                // Fallback to English if exact locale unavailable
-                tts?.language = Locale.US
+        tts?.language = locale
+        tts?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
+            override fun onStart(utteranceId: String?) {
+                onStart()
             }
 
-            val utteranceId = "utterance_${System.currentTimeMillis()}"
-            onStart?.invoke()
-            tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, utteranceId)
-        } catch (e: Exception) {
-            Log.e("TextToSpeechHelper", "Error speaking text", e)
-        }
+            override fun onDone(utteranceId: String?) {
+                onDone()
+            }
+
+            @Deprecated("Deprecated in Java")
+            override fun onError(utteranceId: String?) {
+                onDone()
+            }
+        })
+
+        tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "utterance_${System.currentTimeMillis()}")
     }
 
     fun stop() {
-        if (isInitialized) {
-            tts?.stop()
-            isSpeaking = false
-        }
+        tts?.stop()
     }
 
     fun shutdown() {
-        if (isInitialized) {
-            tts?.stop()
-            tts?.shutdown()
-            tts = null
-            isInitialized = false
-        }
+        tts?.stop()
+        tts?.shutdown()
+        tts = null
     }
 }

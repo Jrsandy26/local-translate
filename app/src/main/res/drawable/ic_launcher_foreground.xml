@@ -1,9 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
-<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <item
-        android:width="70dp"
-        android:height="70dp"
-        android:drawable="@drawable/app_icon_translate_1786801094694"
-        android:gravity="center" />
-</layer-list>
-
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M38,32L34,32L24,58L29,58L31.2,52L40.8,52L43,58L48,58L38,32ZM32.7,48L36,38.5L39.3,48L32.7,48ZM62,38L52,38L52,42L66,42C65.5,47 62.5,53.5 57,57.5C53.5,55 51,52 49,48L45,50C47.5,55 50.5,58.5 54.5,61.5L44,72L47.5,75L58,64.5L68.5,75L72,72L61.5,61.5C67.5,57 71,49.5 71.5,42L76,42L76,38L62,38Z"/>
+</vector>

@@ -10,23 +10,18 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.animation.Crossfade
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.Surface
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
+import androidx.compose.material3.Scaffold
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
 import com.example.model.ActiveScreen
-import com.example.ui.screens.FaceToFaceScreen
-import com.example.ui.screens.HistoryScreen
-import com.example.ui.screens.LanguageLearningScreen
-import com.example.ui.screens.LanguagePacksScreen
-import com.example.ui.screens.LiveTranslationScreen
-import com.example.ui.screens.TranslateHomeScreen
-import com.example.ui.theme.AppCanvasBackground
-import com.example.ui.theme.LiveTranslateTheme
+import com.example.ui.components.BottomNavBar
+import com.example.ui.components.LanguageSelectorSheet
+import com.example.ui.components.SettingsDialog
+import com.example.ui.screens.*
+import com.example.ui.theme.RivaTranslateTheme
 import com.example.ui.viewmodel.TranslationViewModel
 
 class MainActivity : ComponentActivity() {
@@ -38,12 +33,23 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
 
         setContent {
-            LiveTranslateTheme(darkTheme = true) {
-                // Request Audio Recording permission
+            RivaTranslateTheme {
+                val activeScreen by viewModel.activeScreen.collectAsState()
+                val showLangSelector by viewModel.showLanguageSelector.collectAsState()
+                val isSelectingSource by viewModel.isSelectingSource.collectAsState()
+                val sourceLang by viewModel.sourceLanguage.collectAsState()
+                val targetLang by viewModel.targetLanguage.collectAsState()
+                val showSettings by viewModel.showSettingsDialog.collectAsState()
+                val speed by viewModel.speechSpeed.collectAsState()
+                val pitch by viewModel.speechPitch.collectAsState()
+
+                // Permission launcher for microphone
                 val permissionLauncher = rememberLauncherForActivityResult(
                     contract = ActivityResultContracts.RequestPermission()
                 ) { isGranted ->
-                    // Handled
+                    if (isGranted) {
+                        // microphone permitted
+                    }
                 }
 
                 LaunchedEffect(Unit) {
@@ -56,21 +62,107 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
-                Surface(
+                Scaffold(
                     modifier = Modifier.fillMaxSize(),
-                    color = com.example.ui.theme.GlassCanvasDark
-                ) {
-                    val activeScreen by viewModel.activeScreen.collectAsState()
+                    bottomBar = {
+                        // Show bottom nav bar on root tabs
+                        if (activeScreen == ActiveScreen.HOME ||
+                            activeScreen == ActiveScreen.LANGUAGES ||
+                            activeScreen == ActiveScreen.PROFILE
+                        ) {
+                            BottomNavBar(
+                                activeScreen = activeScreen,
+                                onTabSelected = { screen ->
+                                    viewModel.setActiveScreen(screen)
+                                }
+                            )
+                        }
+                    }
+                ) { innerPadding ->
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        Crossfade(
+                            targetState = activeScreen,
+                            label = "ScreenTransition"
+                        ) { screen ->
+                            when (screen) {
+                                ActiveScreen.HOME -> {
+                                    TranslateHomeScreen(
+                                        viewModel = viewModel,
+                                        onNavigateTo = { target ->
+                                            viewModel.setActiveScreen(target)
+                                        }
+                                    )
+                                }
+                                ActiveScreen.LIVE_TRANSLATE -> {
+                                    LiveTranslateScreen(
+                                        viewModel = viewModel,
+                                        onBack = { viewModel.setActiveScreen(ActiveScreen.HOME) }
+                                    )
+                                }
+                                ActiveScreen.CONVERSATION -> {
+                                    ConversationScreen(
+                                        viewModel = viewModel,
+                                        onBack = { viewModel.setActiveScreen(ActiveScreen.HOME) }
+                                    )
+                                }
+                                ActiveScreen.HISTORY -> {
+                                    HistoryScreen(
+                                        viewModel = viewModel,
+                                        onlyFavorites = false,
+                                        onBack = { viewModel.setActiveScreen(ActiveScreen.HOME) }
+                                    )
+                                }
+                                ActiveScreen.SAVED -> {
+                                    HistoryScreen(
+                                        viewModel = viewModel,
+                                        onlyFavorites = true,
+                                        onBack = { viewModel.setActiveScreen(ActiveScreen.HOME) }
+                                    )
+                                }
+                                ActiveScreen.LANGUAGES -> {
+                                    LanguagesScreen(viewModel = viewModel)
+                                }
+                                ActiveScreen.PROFILE -> {
+                                    ProfileScreen(viewModel = viewModel)
+                                }
+                                ActiveScreen.SETTINGS -> {
+                                    // Settings can also be opened via dialog
+                                    TranslateHomeScreen(
+                                        viewModel = viewModel,
+                                        onNavigateTo = { target ->
+                                            viewModel.setActiveScreen(target)
+                                        }
+                                    )
+                                }
+                            }
+                        }
 
-                    Crossfade(targetState = activeScreen, label = "screen_transition") { screen ->
-                        when (screen) {
-                            ActiveScreen.TRANSLATE_HOME -> TranslateHomeScreen(viewModel = viewModel)
-                            ActiveScreen.LIVE_SESSION -> LiveTranslationScreen(viewModel = viewModel)
-                            ActiveScreen.FACE_TO_FACE -> FaceToFaceScreen(viewModel = viewModel)
-                            ActiveScreen.HISTORY -> HistoryScreen(viewModel = viewModel)
-                            ActiveScreen.LANGUAGE_PACKS -> LanguagePacksScreen(viewModel = viewModel)
-                            ActiveScreen.LANGUAGE_LEARNING -> LanguageLearningScreen(viewModel = viewModel)
-                            ActiveScreen.SETTINGS -> com.example.ui.screens.SettingsScreen(viewModel = viewModel)
+                        // Language Selector Sheet
+                        if (showLangSelector) {
+                            LanguageSelectorSheet(
+                                isSelectingSource = isSelectingSource,
+                                currentSelected = if (isSelectingSource) sourceLang else targetLang,
+                                onLanguageSelected = { lang ->
+                                    if (isSelectingSource) {
+                                        viewModel.setSourceLanguage(lang)
+                                    } else {
+                                        viewModel.setTargetLanguage(lang)
+                                    }
+                                },
+                                onDismiss = { viewModel.showLanguageSelector.value = false }
+                            )
+                        }
+
+                        // Settings Dialog
+                        if (showSettings) {
+                            SettingsDialog(
+                                speechSpeed = speed,
+                                onSpeechSpeedChange = { viewModel.speechSpeed.value = it },
+                                speechPitch = pitch,
+                                onSpeechPitchChange = { viewModel.speechPitch.value = it },
+                                onClearHistory = { viewModel.clearAllHistory() },
+                                onDismiss = { viewModel.showSettingsDialog.value = false }
+                            )
                         }
                     }
                 }

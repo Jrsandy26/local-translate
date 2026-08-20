@@ -1,3 +1,22 @@
 <resources>
     <string name="app_name">Riva Translate</string>
+    <string name="title_translate">Translate</string>
+    <string name="subtitle_translate">Communication across languages</string>
+    <string name="enter_text_to_translate">Enter text to translate</string>
+    <string name="type_paste_or_speak">Type, paste or speak to translate...</string>
+    <string name="quick_actions">Quick Actions</string>
+    <string name="live_translate">Live Translate</string>
+    <string name="live_translate_desc">Real-time conversation</string>
+    <string name="conversation">Conversation</string>
+    <string name="conversation_desc">Two-way translation</string>
+    <string name="history">History</string>
+    <string name="history_desc">View your past translations</string>
+    <string name="saved">Saved</string>
+    <string name="saved_desc">Your saved translations</string>
+    <string name="recent_translations">Recent Translations</string>
+    <string name="see_all">See all</string>
+    <string name="home">Home</string>
+    <string name="languages">Languages</string>
+    <string name="profile">Profile</string>
+    <string name="settings">Settings</string>
 </resources>

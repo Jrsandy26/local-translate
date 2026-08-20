@@ -1,465 +1,469 @@
 package com.example.ui.screens
 
-import android.content.ClipData
-import android.content.ClipboardManager
-import android.content.Context
-import android.widget.Toast
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Clear
-import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material.icons.filled.ContentPaste
+import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.ChatBubbleOutline
+import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.History
-import androidx.compose.material.icons.filled.Language
-import androidx.compose.material.icons.filled.Mic
-import androidx.compose.material.icons.filled.School
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.NotificationsNone
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.icons.filled.SwapHoriz
-import androidx.compose.material.icons.filled.Translate
+import androidx.compose.material.icons.filled.StarBorder
 import androidx.compose.material.icons.filled.VolumeUp
-import androidx.compose.material3.Icon
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
-import androidx.compose.ui.draw.rotate
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.model.ActiveScreen
-import com.example.ui.components.GlassAtmosphereBackground
-import com.example.ui.components.GlassButton
-import com.example.ui.components.GlassCard
-import com.example.ui.components.GlassIconButton
-import com.example.ui.components.LanguageSelectorSheet
-import com.example.ui.components.QuickSpeechInputDialog
-import com.example.ui.theme.NeonCyan
-import com.example.ui.theme.NeonEmerald
-import com.example.ui.theme.TextGlassBody
-import com.example.ui.theme.TextGlassHeading
-import com.example.ui.theme.TextGlassMuted
+import com.example.model.RecentTranslation
+import com.example.ui.components.GlowingMicButton
+import com.example.ui.components.LanguagePillSelector
+import com.example.ui.components.QuickActionCard
+import com.example.ui.components.RecentTranslationCard
+import com.example.ui.theme.*
 import com.example.ui.viewmodel.TranslationViewModel
 
 @Composable
-fun TranslateHomeScreen(viewModel: TranslationViewModel) {
-    val context = LocalContext.current
+fun TranslateHomeScreen(
+    viewModel: TranslationViewModel,
+    onNavigateTo: (ActiveScreen) -> Unit,
+    modifier: Modifier = Modifier
+) {
     val sourceLang by viewModel.sourceLanguage.collectAsState()
     val targetLang by viewModel.targetLanguage.collectAsState()
-    val homeInputText by viewModel.homeInputText.collectAsState()
-    val homeTranslatedText by viewModel.homeTranslatedText.collectAsState()
-    val showLanguageSheet by viewModel.showLanguageSheet.collectAsState()
-    val isSelectingSourceLanguage by viewModel.isSelectingSourceLanguage.collectAsState()
+    val inputText by viewModel.homeInputText.collectAsState()
+    val translatedText by viewModel.homeTranslatedText.collectAsState()
+    val isListening by viewModel.isListening.collectAsState()
+    val recentTranslations by viewModel.recentTranslations.collectAsState()
 
-    var showDictationDialog by remember { mutableStateOf(false) }
-    var rotationAngle by remember { mutableStateOf(0f) }
-    val animatedRotation by animateFloatAsState(
-        targetValue = rotationAngle,
-        animationSpec = tween(durationMillis = 400),
-        label = "rotation"
-    )
 
-    GlassAtmosphereBackground(modifier = Modifier.fillMaxSize()) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp, vertical = 16.dp)
-                .padding(top = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            // Header Bar
+
+    LazyColumn(
+        modifier = modifier
+            .fillMaxSize()
+            .background(AppBackground)
+            .statusBarsPadding()
+            .padding(horizontal = 20.dp),
+        contentPadding = PaddingValues(top = 16.dp, bottom = 100.dp)
+    ) {
+        // 1. Header Bar
+        item {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        imageVector = Icons.Default.Translate,
-                        contentDescription = "Riva Translate",
-                        tint = NeonCyan,
-                        modifier = Modifier.size(28.dp)
-                    )
-                    Spacer(modifier = Modifier.width(10.dp))
+                // Title "Translate" with "Trans" (black) and "late" (purple)
+                Column {
                     Text(
-                        text = "Riva Translate",
-                        color = TextGlassHeading,
-                        fontSize = 24.sp,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 0.5.sp
-                    )
-                }
-
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    GlassIconButton(
-                        icon = Icons.Default.School,
-                        contentDescription = "Language Learning",
-                        onClick = { viewModel.setActiveScreen(ActiveScreen.LANGUAGE_LEARNING) }
-                    )
-                    GlassIconButton(
-                        icon = Icons.Default.History,
-                        contentDescription = "History",
-                        onClick = { viewModel.setActiveScreen(ActiveScreen.HISTORY) }
-                    )
-                    GlassIconButton(
-                        icon = Icons.Default.Language,
-                        contentDescription = "Language Packs",
-                        onClick = { viewModel.setActiveScreen(ActiveScreen.LANGUAGE_PACKS) }
-                    )
-                    GlassIconButton(
-                        icon = Icons.Default.Settings,
-                        contentDescription = "Settings",
-                        onClick = { viewModel.setActiveScreen(ActiveScreen.SETTINGS) }
-                    )
-                }
-            }
-
-            // Language Selector Panel
-            GlassCard(modifier = Modifier.fillMaxWidth()) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    // Source Language Selector
-                    Column(
-                        modifier = Modifier
-                            .weight(1f)
-                            .clip(RoundedCornerShape(12.dp))
-                            .clickable {
-                                viewModel.isSelectingSourceLanguage.value = true
-                                viewModel.showLanguageSheet.value = true
+                        text = buildAnnotatedString {
+                            withStyle(
+                                style = SpanStyle(
+                                    color = TextPrimary,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 32.sp
+                                )
+                            ) {
+                                append("Trans")
                             }
-                            .padding(vertical = 8.dp, horizontal = 12.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Text("FROM", color = TextGlassMuted, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(sourceLang.name, color = NeonCyan, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                    }
-
-                    // Swap Button
-                    GlassIconButton(
-                        icon = Icons.Default.SwapHoriz,
-                        contentDescription = "Swap Languages",
-                        size = 38.dp,
-                        modifier = Modifier.rotate(animatedRotation),
-                        onClick = {
-                            rotationAngle += 180f
-                            viewModel.swapLanguages()
+                            withStyle(
+                                style = SpanStyle(
+                                    color = PurplePrimary,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 32.sp
+                                )
+                            ) {
+                                append("late")
+                            }
                         }
                     )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = "Communication across languages",
+                        fontSize = 14.sp,
+                        color = TextSecondary
+                    )
+                }
 
-                    // Target Language Selector
-                    Column(
+                // Top Right Action Buttons
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    // Notification Button with Unread Dot
+                    Box(
                         modifier = Modifier
-                            .weight(1f)
-                            .clip(RoundedCornerShape(12.dp))
-                            .clickable {
-                                viewModel.isSelectingSourceLanguage.value = false
-                                viewModel.showLanguageSheet.value = true
-                            }
-                            .padding(vertical = 8.dp, horizontal = 12.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
+                            .size(44.dp)
+                            .clip(CircleShape)
+                            .background(Color(0xFFF1F1F8))
+                            .clickable { viewModel.showNotificationsDialog.value = true },
+                        contentAlignment = Alignment.Center
                     ) {
-                        Text("TO", color = TextGlassMuted, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(targetLang.name, color = Color(0xFFC084FC), fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                        Icon(
+                            imageVector = Icons.Default.NotificationsNone,
+                            contentDescription = "Notifications",
+                            tint = TextPrimary,
+                            modifier = Modifier.size(22.dp)
+                        )
+                        // Purple Notification Dot
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .padding(top = 10.dp, end = 12.dp)
+                                .size(8.dp)
+                                .clip(CircleShape)
+                                .background(PurplePrimary)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.width(10.dp))
+
+                    // Settings Button
+                    Box(
+                        modifier = Modifier
+                            .size(44.dp)
+                            .clip(CircleShape)
+                            .background(Color(0xFFF1F1F8))
+                            .clickable { viewModel.showSettingsDialog.value = true },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.Settings,
+                            contentDescription = "Settings",
+                            tint = TextPrimary,
+                            modifier = Modifier.size(22.dp)
+                        )
                     }
                 }
             }
 
-            // Large Text Input Card with Dictation Mic
-            GlassCard(
-                modifier = Modifier.fillMaxWidth(),
-                isElevated = true
+            Spacer(modifier = Modifier.height(20.dp))
+        }
+
+        // 2. Main Translation Card
+        item {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .shadow(
+                        elevation = 8.dp,
+                        shape = RoundedCornerShape(28.dp),
+                        spotColor = Color(0x0D6C5CE7)
+                    ),
+                shape = RoundedCornerShape(28.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White)
             ) {
-                Column(modifier = Modifier.fillMaxWidth()) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(20.dp)
+                ) {
+                    // Badge: Sparkle + "Enter text to translate"
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(32.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(PurpleLight),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.AutoAwesome,
+                                contentDescription = null,
+                                tint = PurplePrimary,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.width(10.dp))
+
+                        Text(
+                            text = "Enter text to translate",
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = PurplePrimary
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // Editable Input Area with Placeholder
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 90.dp)
+                    ) {
+                        if (inputText.isEmpty()) {
+                            Text(
+                                text = "Type, paste or speak to translate...",
+                                fontSize = 16.sp,
+                                color = TextMuted,
+                                lineHeight = 22.sp
+                            )
+                        }
+
+                        BasicTextField(
+                            value = inputText,
+                            onValueChange = { viewModel.onHomeInputChanged(it) },
+                            textStyle = androidx.compose.ui.text.TextStyle(
+                                fontSize = 16.sp,
+                                color = TextPrimary,
+                                lineHeight = 22.sp
+                            ),
+                            cursorBrush = SolidColor(PurplePrimary),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+
+                    // Translated Result Live Preview (if typed)
+                    if (translatedText.isNotEmpty()) {
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(16.dp))
+                                .background(Color(0xFFF7F8FC))
+                                .padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = targetLang.name.uppercase(),
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = PurplePrimary
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = translatedText,
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = TextPrimary
+                                )
+                            }
+                            IconButton(
+                                onClick = { viewModel.speakText(translatedText, targetLang.code) },
+                                modifier = Modifier.size(32.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.VolumeUp,
+                                    contentDescription = "Speak",
+                                    tint = PurplePrimary,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(10.dp))
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // Bottom Row: Language Pill Selector + Glowing Mic Button
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(
-                            text = "${sourceLang.name} (Source Text)",
-                            color = NeonCyan,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold
+                        LanguagePillSelector(
+                            sourceLanguage = sourceLang,
+                            targetLanguage = targetLang,
+                            onSourceClick = {
+                                viewModel.isSelectingSource.value = true
+                                viewModel.showLanguageSelector.value = true
+                            },
+                            onTargetClick = {
+                                viewModel.isSelectingSource.value = false
+                                viewModel.showLanguageSelector.value = true
+                            },
+                            onSwapClick = { viewModel.swapLanguages() }
                         )
 
-                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                            if (homeInputText.isNotEmpty()) {
-                                GlassIconButton(
-                                    icon = Icons.Default.VolumeUp,
-                                    contentDescription = "Speak source",
-                                    size = 30.dp,
-                                    onClick = { viewModel.speakHomeSource() }
-                                )
-                                GlassIconButton(
-                                    icon = Icons.Default.Clear,
-                                    contentDescription = "Clear input",
-                                    size = 30.dp,
-                                    onClick = { viewModel.clearHomeInput() }
-                                )
-                            }
-                        }
-                    }
-
-                    Box(modifier = Modifier.fillMaxWidth().height(120.dp)) {
-                        OutlinedTextField(
-                            value = homeInputText,
-                            onValueChange = { viewModel.setHomeInputText(it) },
-                            placeholder = { Text("Type, paste, or speak text to translate...", color = TextGlassMuted) },
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .testTag("text_input"),
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor = Color.Transparent,
-                                unfocusedBorderColor = Color.Transparent,
-                                focusedTextColor = TextGlassHeading,
-                                unfocusedTextColor = TextGlassBody
-                            ),
-                            textStyle = androidx.compose.ui.text.TextStyle(fontSize = 17.sp, lineHeight = 24.sp)
-                        )
-                    }
-
-                    // Bottom Action Row inside Input Card (Mic Dictation & Paste)
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 4.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        // Dictation Mic Button
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(20.dp))
-                                .background(NeonCyan.copy(alpha = 0.15f))
-                                .border(1.dp, NeonCyan.copy(alpha = 0.4f), RoundedCornerShape(20.dp))
-                                .clickable { showDictationDialog = true }
-                                .padding(horizontal = 14.dp, vertical = 6.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    imageVector = Icons.Default.Mic,
-                                    contentDescription = "Voice Dictation",
-                                    tint = NeonCyan,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text("Dictate", color = NeonCyan, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                            }
-                        }
-
-                        // Paste Button
-                        GlassIconButton(
-                            icon = Icons.Default.ContentPaste,
-                            contentDescription = "Paste",
-                            size = 30.dp,
-                            onClick = {
-                                try {
-                                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                    val clipData = clipboard.primaryClip
-                                    if (clipData != null && clipData.itemCount > 0) {
-                                        val pasteText = clipData.getItemAt(0).text.toString()
-                                        if (pasteText.isNotBlank()) {
-                                            viewModel.setHomeInputText(pasteText)
-                                        }
-                                    }
-                                } catch (_: Exception) {}
-                            }
+                        GlowingMicButton(
+                            isListening = isListening,
+                            onClick = { viewModel.toggleMicListening() }
                         )
                     }
                 }
             }
 
-            // Real-time Translation Output Card
-            AnimatedVisibility(visible = homeTranslatedText.isNotEmpty()) {
-                GlassCard(
-                    modifier = Modifier.fillMaxWidth(),
-                    isActive = true
-                ) {
-                    Column(modifier = Modifier.fillMaxWidth()) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = "${targetLang.name} (Translation)",
-                                color = NeonEmerald,
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold
-                            )
+            Spacer(modifier = Modifier.height(24.dp))
+        }
 
-                            // Translation Actions: Copy, Speak, Star / Save
-                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                GlassIconButton(
-                                    icon = Icons.Default.ContentCopy,
-                                    contentDescription = "Copy Translation",
-                                    size = 32.dp,
-                                    onClick = {
-                                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                        val clip = ClipData.newPlainText("Translated Text", homeTranslatedText)
-                                        clipboard.setPrimaryClip(clip)
-                                        Toast.makeText(context, "Copied to clipboard!", Toast.LENGTH_SHORT).show()
-                                    }
-                                )
-
-                                GlassIconButton(
-                                    icon = Icons.Default.VolumeUp,
-                                    contentDescription = "Speak Translation",
-                                    size = 32.dp,
-                                    onClick = { viewModel.speakHomeTranslation() }
-                                )
-
-                                GlassIconButton(
-                                    icon = Icons.Default.Star,
-                                    contentDescription = "Save Translation",
-                                    size = 32.dp,
-                                    onClick = { viewModel.saveHomeTranslationToHistory() }
-                                )
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(10.dp))
-
-                        Text(
-                            text = homeTranslatedText,
-                            color = TextGlassHeading,
-                            fontSize = 20.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            lineHeight = 28.sp,
-                            modifier = Modifier.padding(bottom = 8.dp)
-                        )
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Central Translation Services Quick Launcher
+        // 3. Quick Actions Section
+        item {
             Text(
-                text = "TRANSLATION SERVICES",
-                color = TextGlassMuted,
-                fontSize = 11.sp,
+                text = "Quick Actions",
+                fontSize = 18.sp,
                 fontWeight = FontWeight.Bold,
-                letterSpacing = 1.sp
+                color = TextPrimary
             )
 
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                // Row 1: Live Translation & Conversation Mode
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // 2x2 Grid Layout
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                // Row 1: Live Translate & Conversation
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    GlassButton(
-                        text = "Live Session",
-                        onClick = { viewModel.startNewLiveSession() },
-                        modifier = Modifier.weight(1f),
-                        leadingIcon = Icons.Default.Mic,
-                        gradientColors = listOf(NeonCyan, Color(0xFF0066FF))
+                    QuickActionCard(
+                        title = "Live Translate",
+                        subtitle = "Real-time\nconversation",
+                        icon = Icons.Default.GraphicEq,
+                        iconColor = AccentLive,
+                        iconBgColor = AccentLiveBg,
+                        onClick = { onNavigateTo(ActiveScreen.LIVE_TRANSLATE) },
+                        modifier = Modifier.weight(1f)
                     )
 
-                    GlassButton(
-                        text = "Conversation",
-                        onClick = { viewModel.setActiveScreen(ActiveScreen.FACE_TO_FACE) },
-                        modifier = Modifier.weight(1f),
-                        leadingIcon = Icons.Default.SwapHoriz,
-                        gradientColors = listOf(Color(0xFF8B5CF6), Color(0xFF6D28D9))
+                    QuickActionCard(
+                        title = "Conversation",
+                        subtitle = "Two-way\ntranslation",
+                        icon = Icons.Default.ChatBubbleOutline,
+                        iconColor = AccentConversation,
+                        iconBgColor = AccentConversationBg,
+                        onClick = { onNavigateTo(ActiveScreen.CONVERSATION) },
+                        modifier = Modifier.weight(1f)
                     )
                 }
 
-                // Row 2: Language Learning & Offline Model Packs
+                // Row 2: History & Saved
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    GlassButton(
-                        text = "Learn & Practice",
-                        onClick = { viewModel.setActiveScreen(ActiveScreen.LANGUAGE_LEARNING) },
-                        modifier = Modifier.weight(1f),
-                        leadingIcon = Icons.Default.School,
-                        gradientColors = listOf(NeonEmerald, Color(0xFF059669))
+                    QuickActionCard(
+                        title = "History",
+                        subtitle = "View your past\ntranslations",
+                        icon = Icons.Default.History,
+                        iconColor = AccentHistory,
+                        iconBgColor = AccentHistoryBg,
+                        onClick = { onNavigateTo(ActiveScreen.HISTORY) },
+                        modifier = Modifier.weight(1f)
                     )
 
-                    GlassButton(
-                        text = "Offline Packs",
-                        onClick = { viewModel.setActiveScreen(ActiveScreen.LANGUAGE_PACKS) },
-                        modifier = Modifier.weight(1f),
-                        leadingIcon = Icons.Default.Language,
-                        gradientColors = listOf(Color(0xFF3B82F6), Color(0xFF1D4ED8))
+                    QuickActionCard(
+                        title = "Saved",
+                        subtitle = "Your saved\ntranslations",
+                        icon = Icons.Default.Star,
+                        iconColor = AccentSaved,
+                        iconBgColor = AccentSavedBg,
+                        onClick = { onNavigateTo(ActiveScreen.SAVED) },
+                        modifier = Modifier.weight(1f)
                     )
                 }
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+        }
+
+        // 4. Recent Translations Section
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Recent Translations",
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = TextPrimary
+                )
+
+                Text(
+                    text = "See all",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = PurplePrimary,
+                    modifier = Modifier
+                        .clickable { onNavigateTo(ActiveScreen.HISTORY) }
+                        .padding(vertical = 4.dp, horizontal = 6.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+        }
+
+        // Recent items list
+        if (recentTranslations.isEmpty()) {
+            item {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 16.dp),
+                    shape = RoundedCornerShape(20.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color.White)
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.AutoAwesome,
+                            contentDescription = null,
+                            tint = PurplePrimary.copy(alpha = 0.3f),
+                            modifier = Modifier.size(40.dp)
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text(
+                            text = "No recent translations",
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = TextPrimary
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "Your offline translation history will show up here.",
+                            fontSize = 13.sp,
+                            color = TextSecondary,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                }
+            }
+        } else {
+            items(recentTranslations.take(5), key = { it.id }) { item ->
+                RecentTranslationCard(
+                    item = item,
+                    onToggleFavorite = { viewModel.toggleFavorite(item) },
+                    onSpeak = { viewModel.speakText(item.translatedText, item.targetLangCode) },
+                    onDelete = { viewModel.deleteRecentTranslation(item) },
+                    onClick = {
+                        viewModel.homeInputText.value = item.sourceText
+                        viewModel.onHomeInputChanged(item.sourceText)
+                    },
+                    modifier = Modifier.padding(bottom = 10.dp)
+                )
             }
         }
-    }
-
-    // Dictation speech input dialog
-    if (showDictationDialog) {
-        QuickSpeechInputDialog(
-            onDismiss = { showDictationDialog = false },
-            onTextSubmitted = { text, _ ->
-                viewModel.setHomeInputText(text)
-                showDictationDialog = false
-            }
-        )
-    }
-
-    // Modal Sheet for Selecting Language
-    if (showLanguageSheet) {
-        val currentSelectedCode = if (isSelectingSourceLanguage) sourceLang.code else targetLang.code
-        val title = if (isSelectingSourceLanguage) "Translate From" else "Translate To"
-        LanguageSelectorSheet(
-            title = title,
-            currentSelectedCode = currentSelectedCode,
-            onLanguageSelected = { lang ->
-                if (isSelectingSourceLanguage) {
-                    viewModel.setSourceLanguage(lang)
-                } else {
-                    viewModel.setTargetLanguage(lang)
-                }
-                viewModel.showLanguageSheet.value = false
-            },
-            onDismiss = {
-                viewModel.showLanguageSheet.value = false
-            }
-        )
     }
 }

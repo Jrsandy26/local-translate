@@ -1,64 +1,44 @@
 package com.example.data.db
 
-import androidx.room.Dao
-import androidx.room.Insert
-import androidx.room.OnConflictStrategy
-import androidx.room.Query
-import androidx.room.Transaction
-import androidx.room.Update
-import com.example.model.SessionWithSegments
+import androidx.room.*
+import com.example.model.RecentTranslation
 import com.example.model.TranscriptSegment
 import com.example.model.TranslationSession
 import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface TranslationDao {
+    @Query("SELECT * FROM recent_translations ORDER BY timestamp DESC")
+    fun getAllRecentTranslations(): Flow<List<RecentTranslation>>
 
-    @Transaction
-    @Query("SELECT * FROM translation_sessions ORDER BY timestamp DESC")
-    fun getAllSessionsWithSegments(): Flow<List<SessionWithSegments>>
+    @Query("SELECT * FROM recent_translations WHERE isFavorite = 1 ORDER BY timestamp DESC")
+    fun getFavoriteTranslations(): Flow<List<RecentTranslation>>
 
-    @Transaction
-    @Query("SELECT * FROM translation_sessions WHERE id = :sessionId LIMIT 1")
-    fun getSessionWithSegments(sessionId: Long): Flow<SessionWithSegments?>
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertRecentTranslation(item: RecentTranslation): Long
 
-    @Transaction
-    @Query("SELECT * FROM translation_sessions WHERE id = :sessionId LIMIT 1")
-    suspend fun getSessionWithSegmentsOnce(sessionId: Long): SessionWithSegments?
+    @Update
+    suspend fun updateRecentTranslation(item: RecentTranslation)
 
-    @Query("SELECT COUNT(*) FROM translation_sessions")
-    suspend fun getSessionCount(): Int
+    @Delete
+    suspend fun deleteRecentTranslation(item: RecentTranslation)
+
+    @Query("DELETE FROM recent_translations WHERE id = :id")
+    suspend fun deleteRecentTranslationById(id: Long)
+
+    @Query("DELETE FROM recent_translations")
+    suspend fun clearAllRecentTranslations()
+
+    // Sessions & Segments
+    @Query("SELECT * FROM translation_sessions ORDER BY createdAt DESC")
+    fun getAllSessions(): Flow<List<TranslationSession>>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertSession(session: TranslationSession): Long
 
-    @Update
-    suspend fun updateSession(session: TranslationSession)
-
-    @Query("UPDATE translation_sessions SET title = :title WHERE id = :sessionId")
-    suspend fun updateSessionTitle(sessionId: Long, title: String)
-
-    @Query("UPDATE translation_sessions SET isFavorite = :isFav WHERE id = :sessionId")
-    suspend fun updateFavoriteStatus(sessionId: Long, isFav: Boolean)
-
-    @Query("UPDATE translation_sessions SET durationSeconds = :duration WHERE id = :sessionId")
-    suspend fun updateDuration(sessionId: Long, duration: Int)
-
-    @Query("UPDATE translation_sessions SET audioFilePath = :audioPath WHERE id = :sessionId")
-    suspend fun updateAudioFilePath(sessionId: Long, audioPath: String?)
+    @Query("SELECT * FROM transcript_segments WHERE sessionId = :sessionId ORDER BY timestampMs ASC")
+    fun getSegmentsForSession(sessionId: Long): Flow<List<TranscriptSegment>>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertSegment(segment: TranscriptSegment): Long
-
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertSegments(segments: List<TranscriptSegment>)
-
-    @Query("DELETE FROM transcript_segments WHERE sessionId = :sessionId")
-    suspend fun deleteSegmentsForSession(sessionId: Long)
-
-    @Query("DELETE FROM translation_sessions WHERE id = :sessionId")
-    suspend fun deleteSession(sessionId: Long)
-
-    @Query("DELETE FROM transcript_segments WHERE id = :segmentId")
-    suspend fun deleteSegment(segmentId: Long)
 }
