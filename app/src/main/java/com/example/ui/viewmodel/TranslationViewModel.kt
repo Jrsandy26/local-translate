@@ -1,18 +1,25 @@
 package com.example.ui.viewmodel
 
 import android.app.Application
+import android.content.Context
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.audio.AudioPlaybackHelper
+import com.example.audio.AudioRecorderHelper
 import com.example.audio.SpeechRecognitionHelper
 import com.example.audio.TextToSpeechHelper
 import com.example.data.db.AppDatabase
 import com.example.data.repository.TranslationRepository
 import com.example.model.ActiveScreen
+import com.example.model.AppThemeMode
 import com.example.model.Language
 import com.example.model.RecentTranslation
 import com.example.model.TranscriptSegment
 import com.example.model.TranslationSession
+
+import com.example.service.LiveSessionManager
+import com.example.service.LiveTranslationService
 import com.example.translation.GoogleTranslationEngine
 import com.example.translation.LanguageModelDownloadWorker
 import kotlinx.coroutines.Job
@@ -67,9 +74,32 @@ class TranslationViewModel(application: Application) : AndroidViewModel(applicat
     val livePartialTranslated = MutableStateFlow("")
     val isLiveSessionRunning = MutableStateFlow(false)
     val isLiveSessionPaused = MutableStateFlow(false)
-    val liveTimerSeconds = MutableStateFlow(14)
+    val liveTimerSeconds = MutableStateFlow(0)
     val recordAudioChecked = MutableStateFlow(true)
     private var liveTimerJob: Job? = null
+    private var lastRecordedAudioPath: String? = null
+
+    // Session completion & stopped dialog
+    val showSessionStoppedDialog = MutableStateFlow(false)
+    val completedSession = MutableStateFlow<TranslationSession?>(null)
+    val completedSegments = MutableStateFlow<List<TranscriptSegment>>(emptyList())
+
+    // History Session Details Dialog / Viewer
+    val showSessionDetailDialog = MutableStateFlow(false)
+    val activeDetailSession = MutableStateFlow<TranslationSession?>(null)
+    val activeDetailSegments = MutableStateFlow<List<TranscriptSegment>>(emptyList())
+
+    // Audio Helpers
+    val audioRecorderHelper = AudioRecorderHelper(application)
+    val audioPlaybackHelper = AudioPlaybackHelper(application)
+
+    val isAudioPlaying: StateFlow<Boolean> = audioPlaybackHelper.isPlaying
+    val audioPlaybackPosMs: StateFlow<Int> = audioPlaybackHelper.currentPositionMs
+    val audioPlaybackDurationMs: StateFlow<Int> = audioPlaybackHelper.totalDurationMs
+    val activePlaybackSegmentIndex: StateFlow<Int> = audioPlaybackHelper.activeSegmentIndex
+
+    // Sequential TTS playback job
+    private var sequentialTtsJob: Job? = null
 
     // Conversation State (Two-Way)
     val speaker1Text = MutableStateFlow("")
@@ -84,9 +114,45 @@ class TranslationViewModel(application: Application) : AndroidViewModel(applicat
     val showSettingsDialog = MutableStateFlow(false)
     val showNotificationsDialog = MutableStateFlow(false)
 
-    // Settings
-    val speechSpeed = MutableStateFlow(1.0f)
-    val speechPitch = MutableStateFlow(1.0f)
+    // Settings & Theme Preferences
+    private val prefs = application.getSharedPreferences("app_settings", Context.MODE_PRIVATE)
+    val themeMode = MutableStateFlow(
+        AppThemeMode.fromKey(prefs.getString("key_theme_mode", AppThemeMode.SYSTEM.key))
+    )
+
+    val speechSpeed = MutableStateFlow(prefs.getFloat("key_speech_speed", 1.0f))
+    val speechPitch = MutableStateFlow(prefs.getFloat("key_speech_pitch", 1.0f))
+    val preferredVoiceGender = MutableStateFlow(prefs.getString("key_voice_gender", "Default") ?: "Default")
+
+    fun setThemeMode(mode: AppThemeMode) {
+        themeMode.value = mode
+        prefs.edit().putString("key_theme_mode", mode.key).apply()
+    }
+
+    fun toggleThemeMode() {
+        val current = themeMode.value
+        val nextMode = when (current) {
+            AppThemeMode.DARK -> AppThemeMode.LIGHT
+            AppThemeMode.LIGHT -> AppThemeMode.DARK
+            AppThemeMode.SYSTEM -> AppThemeMode.DARK
+        }
+        setThemeMode(nextMode)
+    }
+
+    fun updateSpeechSpeed(speed: Float) {
+        speechSpeed.value = speed
+        prefs.edit().putFloat("key_speech_speed", speed).apply()
+    }
+
+    fun updateSpeechPitch(pitch: Float) {
+        speechPitch.value = pitch
+        prefs.edit().putFloat("key_speech_pitch", pitch).apply()
+    }
+
+    fun updateVoiceGender(gender: String) {
+        preferredVoiceGender.value = gender
+        prefs.edit().putString("key_voice_gender", gender).apply()
+    }
 
     private var speechHelper: SpeechRecognitionHelper? = null
     private var ttsHelper: TextToSpeechHelper? = null
@@ -126,6 +192,7 @@ class TranslationViewModel(application: Application) : AndroidViewModel(applicat
             },
             onRmsLevelChanged = { rms ->
                 _rmsLevel.value = rms
+                LiveSessionManager.updateRms(rms)
             },
             onListeningStateChanged = { listening ->
                 _isListening.value = listening
@@ -139,6 +206,31 @@ class TranslationViewModel(application: Application) : AndroidViewModel(applicat
 
         // Preload language models
         enqueueLanguageDownloads(_sourceLanguage.value, _targetLanguage.value)
+
+        // Synchronize with LiveSessionManager for Background Service & Live Notifications
+        LiveSessionManager.onSessionStateChanged = { running, paused ->
+            isLiveSessionRunning.value = running
+            isLiveSessionPaused.value = paused
+            if (!running) {
+                speechHelper?.stopListening()
+            }
+        }
+        LiveSessionManager.onTimerTick = { seconds ->
+            liveTimerSeconds.value = seconds
+        }
+        LiveSessionManager.onActionFromNotification = { action ->
+            when (action) {
+                LiveTranslationService.ACTION_PAUSE -> {
+                    pauseLiveSession()
+                }
+                LiveTranslationService.ACTION_RESUME -> {
+                    resumeLiveSession()
+                }
+                LiveTranslationService.ACTION_STOP -> {
+                    stopLiveSession()
+                }
+            }
+        }
     }
 
     fun setActiveScreen(screen: ActiveScreen) {
@@ -261,28 +353,43 @@ class TranslationViewModel(application: Application) : AndroidViewModel(applicat
             speechHelper?.stopListening()
         } else {
             val locale = Locale.forLanguageTag(_sourceLanguage.value.code)
+            speechHelper?.continuousMode = false
             speechHelper?.startListening(locale)
         }
     }
 
     fun startLiveSession() {
+        liveSegments.value = emptyList()
+        livePartialText.value = ""
+        livePartialTranslated.value = ""
+        liveTimerSeconds.value = 0
         isLiveSessionRunning.value = true
         isLiveSessionPaused.value = false
-        if (liveSegments.value.isEmpty() && _sourceLanguage.value.code == "ja") {
-            populateDemoSegments()
+        
+        if (recordAudioChecked.value) {
+            lastRecordedAudioPath = audioRecorderHelper.startRecording()
+        } else {
+            lastRecordedAudioPath = null
         }
-        startLiveTimer()
+
+        speechHelper?.continuousMode = true
+        LiveSessionManager.startService(getApplication())
         val locale = Locale.forLanguageTag(_sourceLanguage.value.code)
         speechHelper?.startListening(locale)
     }
 
     fun pauseLiveSession() {
         isLiveSessionPaused.value = true
+        audioRecorderHelper.pauseRecording()
+        LiveSessionManager.pauseService(getApplication())
         speechHelper?.stopListening()
     }
 
     fun resumeLiveSession() {
         isLiveSessionPaused.value = false
+        audioRecorderHelper.resumeRecording()
+        speechHelper?.continuousMode = true
+        LiveSessionManager.resumeService(getApplication())
         val locale = Locale.forLanguageTag(_sourceLanguage.value.code)
         speechHelper?.startListening(locale)
     }
@@ -290,9 +397,46 @@ class TranslationViewModel(application: Application) : AndroidViewModel(applicat
     fun stopLiveSession() {
         isLiveSessionRunning.value = false
         isLiveSessionPaused.value = false
-        liveTimerJob?.cancel()
-        liveTimerJob = null
         speechHelper?.stopListening()
+        
+        val recordedPath = if (recordAudioChecked.value) {
+            audioRecorderHelper.stopRecording() ?: lastRecordedAudioPath
+        } else {
+            audioRecorderHelper.stopRecording()
+            null
+        }
+
+        LiveSessionManager.stopService(getApplication())
+
+        val currentSegs = liveSegments.value
+        val sessionDuration = liveTimerSeconds.value
+        val title = "${_sourceLanguage.value.name} → ${_targetLanguage.value.name}"
+
+        viewModelScope.launch {
+            val savedId = if (currentSegs.isNotEmpty()) {
+                repository.saveCompletedSession(
+                    title = title,
+                    src = _sourceLanguage.value.code,
+                    tgt = _targetLanguage.value.code,
+                    durationSeconds = sessionDuration,
+                    audioPath = recordedPath,
+                    segments = currentSegs
+                )
+            } else {
+                0L
+            }
+
+            completedSession.value = TranslationSession(
+                id = savedId,
+                title = title,
+                sourceLanguageCode = _sourceLanguage.value.code,
+                targetLanguageCode = _targetLanguage.value.code,
+                durationSeconds = sessionDuration,
+                audioFilePath = recordedPath
+            )
+            completedSegments.value = currentSegs
+            showSessionStoppedDialog.value = true
+        }
     }
 
     fun resetLiveTranscript() {
@@ -306,42 +450,114 @@ class TranslationViewModel(application: Application) : AndroidViewModel(applicat
         recordAudioChecked.value = !recordAudioChecked.value
     }
 
-    private fun startLiveTimer() {
-        liveTimerJob?.cancel()
-        liveTimerJob = viewModelScope.launch {
-            while (true) {
-                delay(1000)
-                if (isLiveSessionRunning.value && !isLiveSessionPaused.value) {
-                    liveTimerSeconds.value += 1
+    // Audio and Synced Transcript Playback Methods
+    fun playSessionAudio(
+        audioPath: String?,
+        segments: List<TranscriptSegment>,
+        targetLangCode: String = _targetLanguage.value.code
+    ) {
+        stopAudioPlayback()
+        if (!audioPath.isNullOrBlank() && java.io.File(audioPath).exists()) {
+            // Play real recorded audio file
+            audioPlaybackHelper.playAudioFile(
+                filePath = audioPath,
+                onComplete = {
+                    audioPlaybackHelper.setActiveSegment(-1)
+                },
+                onError = {
+                    // Fallback to sequential TTS if audio file cannot be played
+                    playSequentialTts(segments, useTranslated = true, targetLangCode = targetLangCode)
                 }
+            )
+        } else {
+            // Play sequential synchronized TTS speech
+            playSequentialTts(segments, useTranslated = true, targetLangCode = targetLangCode)
+        }
+    }
+
+    fun playSequentialTts(
+        segments: List<TranscriptSegment>,
+        useTranslated: Boolean,
+        targetLangCode: String = _targetLanguage.value.code
+    ) {
+        stopAudioPlayback()
+        if (segments.isEmpty()) return
+
+        val totalSec = segments.size * 3
+        audioPlaybackHelper.setSimulatedDuration(totalSec)
+        audioPlaybackHelper.setPlayingState(true)
+
+        sequentialTtsJob = viewModelScope.launch {
+            for (index in segments.indices) {
+                if (!audioPlaybackHelper.isPlaying.value) break
+                val seg = segments[index]
+                audioPlaybackHelper.setActiveSegment(index)
+                val textToSpeak = if (useTranslated) seg.translatedText else seg.sourceText
+                val langToSpeak = if (useTranslated) targetLangCode else _sourceLanguage.value.code
+
+                audioPlaybackHelper.updateProgressManually(index * 3000, totalSec * 1000)
+                speakText(textToSpeak, langToSpeak)
+                delay(3000)
+            }
+            audioPlaybackHelper.setActiveSegment(-1)
+            audioPlaybackHelper.setPlayingState(false)
+            audioPlaybackHelper.updateProgressManually(totalSec * 1000, totalSec * 1000)
+        }
+    }
+
+    fun pauseAudioPlayback() {
+        sequentialTtsJob?.cancel()
+        audioPlaybackHelper.pause()
+    }
+
+    fun resumeAudioPlayback() {
+        audioPlaybackHelper.resume()
+    }
+
+    fun stopAudioPlayback() {
+        sequentialTtsJob?.cancel()
+        sequentialTtsJob = null
+        audioPlaybackHelper.stop()
+        audioPlaybackHelper.setActiveSegment(-1)
+    }
+
+    fun seekAudioPlayback(posMs: Int) {
+        audioPlaybackHelper.seekTo(posMs)
+    }
+
+    fun playSingleSegment(segment: TranscriptSegment, speakTranslated: Boolean) {
+        val text = if (speakTranslated) segment.translatedText else segment.sourceText
+        val lang = if (speakTranslated) _targetLanguage.value.code else _sourceLanguage.value.code
+        speakText(text, lang)
+    }
+
+    fun openSessionDetail(session: TranslationSession) {
+        viewModelScope.launch {
+            val segs = repository.getSegmentsList(session.id)
+            activeDetailSession.value = session
+            activeDetailSegments.value = segs
+            showSessionDetailDialog.value = true
+        }
+    }
+
+    suspend fun getSessionSegments(sessionId: Long): List<TranscriptSegment> {
+        return repository.getSegmentsList(sessionId)
+    }
+
+    fun deleteSession(session: TranslationSession) {
+        viewModelScope.launch {
+            repository.deleteSession(session)
+            if (activeDetailSession.value?.id == session.id) {
+                showSessionDetailDialog.value = false
+                activeDetailSession.value = null
             }
         }
     }
 
-    fun populateDemoSegments() {
-        liveSegments.value = listOf(
-            TranscriptSegment(
-                sessionId = 0,
-                speaker = "日本語",
-                sourceText = "先生、カバ。",
-                translatedText = "Teacher, hippo.",
-                isSourceSpeaker = true
-            ),
-            TranscriptSegment(
-                sessionId = 0,
-                speaker = "日本語",
-                sourceText = "Shinji、virmal。",
-                translatedText = "Shinji, Virmal.",
-                isSourceSpeaker = true
-            ),
-            TranscriptSegment(
-                sessionId = 0,
-                speaker = "日本語",
-                sourceText = "うん。",
-                translatedText = "Yeah.",
-                isSourceSpeaker = true
-            )
-        )
+    fun clearAllSessions() {
+        viewModelScope.launch {
+            repository.clearAllSessions()
+        }
     }
 
     private fun handlePartialSpeech(partial: String) {
@@ -450,6 +666,7 @@ class TranslationViewModel(application: Application) : AndroidViewModel(applicat
         if (text.isBlank()) return
         ttsHelper?.speechRate = speechSpeed.value
         ttsHelper?.pitch = speechPitch.value
+        ttsHelper?.preferredVoiceGender = preferredVoiceGender.value
         ttsHelper?.speak(
             text = text,
             langCode = langCode,
@@ -501,6 +718,7 @@ class TranslationViewModel(application: Application) : AndroidViewModel(applicat
         super.onCleared()
         speechHelper?.destroy()
         ttsHelper?.shutdown()
+        LiveSessionManager.stopService(getApplication())
         GoogleTranslationEngine.close()
     }
 }

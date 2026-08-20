@@ -22,6 +22,8 @@ class TextToSpeechHelper(context: Context) {
             tts?.setPitch(value)
         }
 
+    var preferredVoiceGender: String = "Default"
+
     init {
         tts = TextToSpeech(context.applicationContext) { status ->
             if (status == TextToSpeech.SUCCESS) {
@@ -53,6 +55,51 @@ class TextToSpeechHelper(context: Context) {
         }
 
         tts?.language = locale
+
+        // Filter and choose preferred voice gender if not "Default"
+        if (preferredVoiceGender != "Default") {
+            try {
+                val availableVoices = tts?.voices
+                if (availableVoices != null) {
+                    val matchingVoices = availableVoices.filter { voice ->
+                        voice.locale.language == locale.language && 
+                        (locale.country.isEmpty() || voice.locale.country == locale.country)
+                    }
+
+                    if (matchingVoices.isNotEmpty()) {
+                        val isMaleRequested = preferredVoiceGender.equals("Male", ignoreCase = true)
+                        val selectedVoice = matchingVoices.find { voice ->
+                            val nameLower = voice.name.lowercase()
+                            if (isMaleRequested) {
+                                nameLower.contains("male") || 
+                                nameLower.contains("-b-") || 
+                                nameLower.contains("-e-") || 
+                                nameLower.contains("-f-") || 
+                                nameLower.contains("-iol-") || 
+                                nameLower.contains("-iom-") || 
+                                nameLower.contains("-rgf-")
+                            } else {
+                                nameLower.contains("female") || 
+                                nameLower.contains("-a-") || 
+                                nameLower.contains("-c-") || 
+                                nameLower.contains("-d-") || 
+                                nameLower.contains("-g-") || 
+                                nameLower.contains("-sfg-") || 
+                                nameLower.contains("-tpf-")
+                            }
+                        } ?: matchingVoices.firstOrNull()
+
+                        if (selectedVoice != null) {
+                            tts?.voice = selectedVoice
+                            Log.d("TTSHelper", "Selected voice: ${selectedVoice.name} for gender: $preferredVoiceGender")
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("TTSHelper", "Error filtering voices: ", e)
+            }
+        }
+
         tts?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
             override fun onStart(utteranceId: String?) {
                 onStart()

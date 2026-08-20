@@ -36,8 +36,26 @@ interface TranslationDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertSession(session: TranslationSession): Long
 
+    @Update
+    suspend fun updateSession(session: TranslationSession)
+
+    @Delete
+    suspend fun deleteSession(session: TranslationSession)
+
+    @Query("DELETE FROM translation_sessions WHERE id = :id")
+    suspend fun deleteSessionById(id: Long)
+
+    @Query("DELETE FROM transcript_segments WHERE sessionId = :sessionId")
+    suspend fun deleteSegmentsForSession(sessionId: Long)
+
+    @Query("DELETE FROM translation_sessions")
+    suspend fun clearAllSessions()
+
     @Query("SELECT * FROM transcript_segments WHERE sessionId = :sessionId ORDER BY timestampMs ASC")
     fun getSegmentsForSession(sessionId: Long): Flow<List<TranscriptSegment>>
+
+    @Query("SELECT * FROM transcript_segments WHERE sessionId = :sessionId ORDER BY timestampMs ASC")
+    suspend fun getSegmentsListForSession(sessionId: Long): List<TranscriptSegment>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertSegment(segment: TranscriptSegment): Long

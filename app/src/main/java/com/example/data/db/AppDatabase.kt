@@ -14,7 +14,7 @@ import com.example.model.TranslationSession
         TranslationSession::class,
         TranscriptSegment::class
     ],
-    version = 1,
+    version = 2,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {

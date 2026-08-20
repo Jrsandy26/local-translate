@@ -1,0 +1,30 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="64dp"
+    android:height="28dp"
+    android:viewportWidth="64"
+    android:viewportHeight="28">
+    <!-- Left Dot -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M5,14a2.5,2.5 0 1,0 0,-0.01z" />
+    <!-- Bar 1 (White) -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M14,8h3c0.8,0 1.5,0.7 1.5,1.5v9c0,0.8 -0.7,1.5 -1.5,1.5h-3c-0.8,0 -1.5,-0.7 -1.5,-1.5v-9c0,-0.8 0.7,-1.5 1.5,-1.5z" />
+    <!-- Bar 2 (White) -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M24,5h3c0.8,0 1.5,0.7 1.5,1.5v15c0,0.8 -0.7,1.5 -1.5,1.5h-3c-0.8,0 -1.5,-0.7 -1.5,-1.5v-15c0,-0.8 0.7,-1.5 1.5,-1.5z" />
+    <!-- Bar 3 (Red/Coral Accent) -->
+    <path
+        android:fillColor="#F04438"
+        android:pathData="M34,2h3c0.8,0 1.5,0.7 1.5,1.5v21c0,0.8 -0.7,1.5 -1.5,1.5h-3c-0.8,0 -1.5,-0.7 -1.5,-1.5v-21c0,-0.8 0.7,-1.5 1.5,-1.5z" />
+    <!-- Right Dot 1 (Grey/White) -->
+    <path
+        android:fillColor="#88FFFFFF"
+        android:pathData="M46,14a2,2 0 1,0 0,-0.01z" />
+    <!-- Right Dot 2 (Grey/White) -->
+    <path
+        android:fillColor="#55FFFFFF"
+        android:pathData="M54,14a2,2 0 1,0 0,-0.01z" />
+</vector>

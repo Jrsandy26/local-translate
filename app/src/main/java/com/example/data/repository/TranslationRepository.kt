@@ -42,8 +42,43 @@ class TranslationRepository(private val dao: TranslationDao) {
         return dao.insertSession(session)
     }
 
+    suspend fun saveCompletedSession(
+        title: String,
+        src: String,
+        tgt: String,
+        durationSeconds: Int,
+        audioPath: String?,
+        segments: List<TranscriptSegment>
+    ): Long {
+        val session = TranslationSession(
+            title = title,
+            sourceLanguageCode = src,
+            targetLanguageCode = tgt,
+            durationSeconds = durationSeconds,
+            audioFilePath = audioPath
+        )
+        val sessionId = dao.insertSession(session)
+        for (seg in segments) {
+            dao.insertSegment(seg.copy(sessionId = sessionId))
+        }
+        return sessionId
+    }
+
+    suspend fun deleteSession(session: TranslationSession) {
+        dao.deleteSegmentsForSession(session.id)
+        dao.deleteSession(session)
+    }
+
+    suspend fun clearAllSessions() {
+        dao.clearAllSessions()
+    }
+
     fun getSegments(sessionId: Long): Flow<List<TranscriptSegment>> {
         return dao.getSegmentsForSession(sessionId)
+    }
+
+    suspend fun getSegmentsList(sessionId: Long): List<TranscriptSegment> {
+        return dao.getSegmentsListForSession(sessionId)
     }
 
     suspend fun addSegment(sessionId: Long, speaker: String, srcText: String, tgtText: String, isSrc: Boolean) {

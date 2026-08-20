@@ -4,15 +4,11 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.outlined.Home
-import androidx.compose.material.icons.outlined.Language
-import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -23,14 +19,12 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.model.ActiveScreen
-import com.example.ui.theme.PurpleLight
-import com.example.ui.theme.PurplePrimary
-import com.example.ui.theme.TextMuted
-import com.example.ui.theme.TextSecondary
+import com.example.ui.theme.AppTheme
 
 @Composable
 fun BottomNavBar(
@@ -38,6 +32,8 @@ fun BottomNavBar(
     onTabSelected: (ActiveScreen) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val colors = AppTheme.colors
+
     Box(
         modifier = modifier
             .fillMaxWidth()
@@ -49,12 +45,12 @@ fun BottomNavBar(
             modifier = Modifier
                 .fillMaxWidth()
                 .shadow(
-                    elevation = 12.dp,
+                    elevation = if (colors.isDark) 4.dp else 12.dp,
                     shape = RoundedCornerShape(32.dp),
-                    spotColor = Color(0x1A6C5CE7)
+                    spotColor = colors.primary.copy(alpha = 0.2f)
                 )
                 .clip(RoundedCornerShape(32.dp))
-                .background(Color.White)
+                .background(colors.surface)
                 .padding(horizontal = 16.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.SpaceAround,
             verticalAlignment = Alignment.CenterVertically
@@ -63,21 +59,24 @@ fun BottomNavBar(
                 label = "Home",
                 icon = Icons.Default.Home,
                 isSelected = activeScreen == ActiveScreen.HOME,
-                onClick = { onTabSelected(ActiveScreen.HOME) }
+                onClick = { onTabSelected(ActiveScreen.HOME) },
+                testTag = "nav_home"
             )
 
             NavItem(
                 label = "Languages",
                 icon = Icons.Default.Language,
                 isSelected = activeScreen == ActiveScreen.LANGUAGES,
-                onClick = { onTabSelected(ActiveScreen.LANGUAGES) }
+                onClick = { onTabSelected(ActiveScreen.LANGUAGES) },
+                testTag = "nav_languages"
             )
 
             NavItem(
                 label = "Profile",
                 icon = Icons.Default.Person,
                 isSelected = activeScreen == ActiveScreen.PROFILE,
-                onClick = { onTabSelected(ActiveScreen.PROFILE) }
+                onClick = { onTabSelected(ActiveScreen.PROFILE) },
+                testTag = "nav_profile"
             )
         }
     }
@@ -88,15 +87,18 @@ private fun NavItem(
     label: String,
     icon: ImageVector,
     isSelected: Boolean,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    testTag: String
 ) {
+    val colors = AppTheme.colors
+
     val bgColor by animateColorAsState(
-        targetValue = if (isSelected) PurpleLight else Color.Transparent,
-        label = "bgColor"
+        targetValue = if (isSelected) colors.primaryLight else Color.Transparent,
+        label = "navBgColor"
     )
     val contentColor by animateColorAsState(
-        targetValue = if (isSelected) PurplePrimary else TextMuted,
-        label = "contentColor"
+        targetValue = if (isSelected) colors.primary else colors.textMuted,
+        label = "navContentColor"
     )
 
     Column(
@@ -104,7 +106,8 @@ private fun NavItem(
             .clip(RoundedCornerShape(24.dp))
             .background(bgColor)
             .clickable { onClick() }
-            .padding(horizontal = 24.dp, vertical = 8.dp),
+            .padding(horizontal = 24.dp, vertical = 8.dp)
+            .testTag(testTag),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
@@ -118,7 +121,7 @@ private fun NavItem(
         Text(
             text = label,
             fontSize = 11.sp,
-            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
             color = contentColor
         )
     }

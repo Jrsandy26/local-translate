@@ -22,10 +22,15 @@ class SpeechRecognitionHelper(
     private val mainHandler = Handler(Looper.getMainLooper())
     private var speechRecognizer: SpeechRecognizer? = null
     private var isListening = false
+    var continuousMode = false
+    private var currentLocale: Locale = Locale.getDefault()
+    private var restartRunnable: Runnable? = null
 
     fun isAvailable(): Boolean = SpeechRecognizer.isRecognitionAvailable(context)
 
     fun startListening(locale: Locale = Locale.getDefault()) {
+        currentLocale = locale
+        cancelRestart()
         mainHandler.post {
             try {
                 if (speechRecognizer == null) {
@@ -52,9 +57,12 @@ class SpeechRecognitionHelper(
     }
 
     fun stopListening() {
+        continuousMode = false
+        cancelRestart()
         mainHandler.post {
             try {
                 speechRecognizer?.stopListening()
+                speechRecognizer?.cancel()
             } catch (e: Exception) {
                 Log.e("SpeechRecognition", "Error stopping listening", e)
             }
@@ -64,6 +72,8 @@ class SpeechRecognitionHelper(
     }
 
     fun destroy() {
+        continuousMode = false
+        cancelRestart()
         mainHandler.post {
             try {
                 speechRecognizer?.destroy()
@@ -76,9 +86,33 @@ class SpeechRecognitionHelper(
         }
     }
 
+    private fun cancelRestart() {
+        restartRunnable?.let { mainHandler.removeCallbacks(it) }
+        restartRunnable = null
+    }
+
+    private fun scheduleRestart() {
+        if (!continuousMode) return
+        cancelRestart()
+        restartRunnable = Runnable {
+            if (continuousMode) {
+                try {
+                    speechRecognizer?.cancel()
+                    startListening(currentLocale)
+                } catch (e: Exception) {
+                    Log.e("SpeechRecognition", "Error restarting recognizer", e)
+                }
+            }
+        }
+        mainHandler.postDelayed(restartRunnable!!, 300)
+    }
+
     private fun createListener(): RecognitionListener {
         return object : RecognitionListener {
-            override fun onReadyForSpeech(params: Bundle?) {}
+            override fun onReadyForSpeech(params: Bundle?) {
+                isListening = true
+                this@SpeechRecognitionHelper.onListeningStateChanged.invoke(true)
+            }
 
             override fun onBeginningOfSpeech() {}
 
@@ -99,6 +133,9 @@ class SpeechRecognitionHelper(
                 Log.w("SpeechRecognition", "Recognition error: $error")
                 this@SpeechRecognitionHelper.onListeningStateChanged.invoke(false)
                 isListening = false
+                if (continuousMode) {
+                    scheduleRestart()
+                }
             }
 
             override fun onResults(results: Bundle?) {
@@ -109,6 +146,9 @@ class SpeechRecognitionHelper(
                 }
                 this@SpeechRecognitionHelper.onListeningStateChanged.invoke(false)
                 isListening = false
+                if (continuousMode) {
+                    scheduleRestart()
+                }
             }
 
             override fun onPartialResults(partialResults: Bundle?) {

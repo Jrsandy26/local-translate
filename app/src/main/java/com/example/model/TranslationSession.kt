@@ -24,7 +24,8 @@ data class TranslationSession(
     val targetLanguageCode: String,
     val createdAt: Long = System.currentTimeMillis(),
     val durationSeconds: Int = 0,
-    val isFavorite: Boolean = false
+    val isFavorite: Boolean = false,
+    val audioFilePath: String? = null
 )
 
 @Entity(tableName = "transcript_segments")

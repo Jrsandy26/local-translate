@@ -2,6 +2,7 @@ package com.example
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -34,7 +35,8 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
 
         setContent {
-            RivaTranslateTheme {
+            val themeMode by viewModel.themeMode.collectAsState()
+            RivaTranslateTheme(themeMode = themeMode) {
                 val activeScreen by viewModel.activeScreen.collectAsState()
                 val showLangSelector by viewModel.showLanguageSelector.collectAsState()
                 val isSelectingSource by viewModel.isSelectingSource.collectAsState()
@@ -43,6 +45,7 @@ class MainActivity : ComponentActivity() {
                 val showSettings by viewModel.showSettingsDialog.collectAsState()
                 val speed by viewModel.speechSpeed.collectAsState()
                 val pitch by viewModel.speechPitch.collectAsState()
+                val preferredVoiceGender by viewModel.preferredVoiceGender.collectAsState()
 
                 // Android System Navigation Gesture / Back Button Handler
                 // Intercepts back gestures when not at root home screen or when dialogs/sheets are open
@@ -51,22 +54,27 @@ class MainActivity : ComponentActivity() {
                     viewModel.navigateBack()
                 }
 
-                // Permission launcher for microphone
-                val permissionLauncher = rememberLauncherForActivityResult(
-                    contract = ActivityResultContracts.RequestPermission()
-                ) { isGranted ->
-                    if (isGranted) {
-                        // microphone permitted
-                    }
-                }
+                // Permission launcher for microphone and live notifications
+                val permissionsLauncher = rememberLauncherForActivityResult(
+                    contract = ActivityResultContracts.RequestMultiplePermissions()
+                ) { _ -> }
 
                 LaunchedEffect(Unit) {
-                    if (ContextCompat.checkSelfPermission(
-                            this@MainActivity,
-                            Manifest.permission.RECORD_AUDIO
-                        ) != PackageManager.PERMISSION_GRANTED
+                    val permissionsToRequest = mutableListOf(Manifest.permission.RECORD_AUDIO)
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        if (ContextCompat.checkSelfPermission(
+                                this@MainActivity,
+                                Manifest.permission.POST_NOTIFICATIONS
+                            ) != PackageManager.PERMISSION_GRANTED
+                        ) {
+                            permissionsToRequest.add(Manifest.permission.POST_NOTIFICATIONS)
+                        }
+                    }
+                    if (permissionsToRequest.any {
+                            ContextCompat.checkSelfPermission(this@MainActivity, it) != PackageManager.PERMISSION_GRANTED
+                        }
                     ) {
-                        permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                        permissionsLauncher.launch(permissionsToRequest.toTypedArray())
                     }
                 }
 
@@ -164,14 +172,19 @@ class MainActivity : ComponentActivity() {
                         // Settings Dialog
                         if (showSettings) {
                             SettingsDialog(
+                                themeMode = themeMode,
+                                onThemeModeChange = { viewModel.setThemeMode(it) },
                                 speechSpeed = speed,
-                                onSpeechSpeedChange = { viewModel.speechSpeed.value = it },
+                                onSpeechSpeedChange = { viewModel.updateSpeechSpeed(it) },
                                 speechPitch = pitch,
-                                onSpeechPitchChange = { viewModel.speechPitch.value = it },
+                                onSpeechPitchChange = { viewModel.updateSpeechPitch(it) },
+                                preferredVoiceGender = preferredVoiceGender,
+                                onVoiceGenderChange = { viewModel.updateVoiceGender(it) },
                                 onClearHistory = { viewModel.clearAllHistory() },
                                 onDismiss = { viewModel.showSettingsDialog.value = false }
                             )
                         }
+
                     }
                 }
             }

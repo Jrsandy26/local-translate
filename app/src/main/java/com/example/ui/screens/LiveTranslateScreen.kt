@@ -13,12 +13,16 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.DarkMode
+import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.filled.Subtitles
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -41,23 +45,28 @@ import androidx.compose.ui.unit.sp
 import com.example.model.ActiveScreen
 import com.example.model.Language
 import com.example.model.TranscriptSegment
+import com.example.model.TranslationSession
+import com.example.ui.components.ExportSessionDialog
+import com.example.ui.components.SessionPlaybackDialog
+import com.example.ui.theme.AppTheme
 import com.example.ui.viewmodel.TranslationViewModel
 
-// Color Palette specifically tailored for the warm peach/cream Live Translate design
-private val ScreenBackground = Color(0xFFFFF9F3)
-private val CardBg = Color(0xFFFFF8F1)
-private val PillBg = Color(0xFFF6ECE0)
-private val PillBorder = Color(0xFFEEDECF)
-private val DarkBrownText = Color(0xFF2C1D13)
-private val SubtitleBrownText = Color(0xFF8C7362)
-private val WarmOrange = Color(0xFFEE7931)
-private val WarmOrangeLight = Color(0xFFFFE5D6)
-private val ControlCardBg = Color(0xFFFDF5EC)
-private val ControlCircleBg = Color(0xFFF6E8DC)
+// Dynamic Live Translate color palette adapting to Light & Dark themes
+private val ScreenBackground @Composable get() = AppTheme.liveTheme.screenBackground
+private val CardBg @Composable get() = AppTheme.liveTheme.cardBackground
+private val PillBg @Composable get() = AppTheme.liveTheme.pillBackground
+private val PillBorder @Composable get() = AppTheme.liveTheme.pillBorder
+private val DarkBrownText @Composable get() = AppTheme.liveTheme.titleText
+private val SubtitleBrownText @Composable get() = AppTheme.liveTheme.subtitleText
+private val WarmOrange @Composable get() = AppTheme.liveTheme.accentOrange
+private val WarmOrangeLight @Composable get() = AppTheme.liveTheme.accentOrangeLight
+private val ControlCardBg @Composable get() = AppTheme.liveTheme.controlCardBg
+private val ControlCircleBg @Composable get() = AppTheme.liveTheme.controlCircleBg
 private val StopRed = Color(0xFFD32F2F)
 private val LiveRed = Color(0xFFE65100)
-private val WaveformOrange = Color(0xFFE08244)
-private val DottedLineColor = Color(0xFFE8D7C7)
+private val WaveformOrange @Composable get() = AppTheme.liveTheme.accentOrange
+private val DottedLineColor @Composable get() = AppTheme.liveTheme.dottedLine
+
 
 @Composable
 fun LiveTranslateScreen(
@@ -77,8 +86,52 @@ fun LiveTranslateScreen(
     val partialTranslated by viewModel.livePartialTranslated.collectAsState()
     val rmsLevel by viewModel.rmsLevel.collectAsState()
 
+    val showStoppedDialog by viewModel.showSessionStoppedDialog.collectAsState()
+    val completedSession by viewModel.completedSession.collectAsState()
+    val completedSegments by viewModel.completedSegments.collectAsState()
+
+    var showLiveExportDialog by remember { mutableStateOf(false) }
+
+    if (showLiveExportDialog && segments.isNotEmpty()) {
+        val tempSession = remember(segments, timerSeconds, sourceLang, targetLang) {
+            TranslationSession(
+                id = System.currentTimeMillis(),
+                title = "Live ${sourceLang.name} to ${targetLang.name}",
+                sourceLanguageCode = sourceLang.code,
+                targetLanguageCode = targetLang.code,
+                durationSeconds = timerSeconds.coerceAtLeast(segments.size * 3),
+                createdAt = System.currentTimeMillis()
+            )
+        }
+        ExportSessionDialog(
+            session = tempSession,
+            segments = segments,
+            onDismiss = { showLiveExportDialog = false }
+        )
+    }
+
     // Treat as active view if session running or if we have conversation items
     val isActiveMode = isSessionRunning || segments.isNotEmpty() || partialText.isNotEmpty()
+
+    if (showStoppedDialog && completedSession != null) {
+        SessionPlaybackDialog(
+            session = completedSession,
+            segments = completedSegments,
+            viewModel = viewModel,
+            onDismiss = {
+                viewModel.showSessionStoppedDialog.value = false
+            },
+            onStartNewSession = {
+                viewModel.showSessionStoppedDialog.value = false
+                viewModel.resetLiveTranscript()
+                viewModel.startLiveSession()
+            },
+            onGoToHistory = {
+                viewModel.showSessionStoppedDialog.value = false
+                viewModel.setActiveScreen(ActiveScreen.HISTORY)
+            }
+        )
+    }
 
     Column(
         modifier = modifier
@@ -89,8 +142,11 @@ fun LiveTranslateScreen(
         // 1. Top App Bar
         TopLiveBar(
             onBack = onBack,
-            onHistoryClick = { viewModel.setActiveScreen(ActiveScreen.HISTORY) }
+            onHistoryClick = { viewModel.setActiveScreen(ActiveScreen.HISTORY) },
+            onToggleTheme = { viewModel.toggleThemeMode() },
+            isDarkTheme = AppTheme.liveTheme.isDark
         )
+
 
         // 2. Language Selector Row (Japanese ⇄ English)
         LanguageBar(
@@ -130,7 +186,8 @@ fun LiveTranslateScreen(
                         segments = segments,
                         partialText = partialText,
                         partialTranslated = partialTranslated,
-                        isPaused = isSessionPaused
+                        isPaused = isSessionPaused,
+                        onExportClick = { showLiveExportDialog = true }
                     )
                 } else {
                     IdleLiveTranslateView(
@@ -167,7 +224,9 @@ fun LiveTranslateScreen(
 @Composable
 private fun TopLiveBar(
     onBack: () -> Unit,
-    onHistoryClick: () -> Unit
+    onHistoryClick: () -> Unit,
+    onToggleTheme: () -> Unit,
+    isDarkTheme: Boolean
 ) {
     Row(
         modifier = Modifier
@@ -197,21 +256,38 @@ private fun TopLiveBar(
             color = DarkBrownText
         )
 
-        IconButton(
-            onClick = onHistoryClick,
-            modifier = Modifier
-                .size(44.dp)
-                .testTag("live_history_button")
-        ) {
-            Icon(
-                imageVector = Icons.Default.History,
-                contentDescription = "Translation History",
-                tint = DarkBrownText,
-                modifier = Modifier.size(26.dp)
-            )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            IconButton(
+                onClick = onToggleTheme,
+                modifier = Modifier
+                    .size(44.dp)
+                    .testTag("live_theme_toggle_button")
+            ) {
+                Icon(
+                    imageVector = if (isDarkTheme) Icons.Default.LightMode else Icons.Default.DarkMode,
+                    contentDescription = if (isDarkTheme) "Switch to Light Theme" else "Switch to Dark Theme",
+                    tint = DarkBrownText,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+
+            IconButton(
+                onClick = onHistoryClick,
+                modifier = Modifier
+                    .size(44.dp)
+                    .testTag("live_history_button")
+            ) {
+                Icon(
+                    imageVector = Icons.Default.History,
+                    contentDescription = "Translation History",
+                    tint = DarkBrownText,
+                    modifier = Modifier.size(26.dp)
+                )
+            }
         }
     }
 }
+
 
 @Composable
 private fun LanguageBar(
@@ -452,43 +528,74 @@ private fun ActiveLiveTranscriptView(
     segments: List<TranscriptSegment>,
     partialText: String,
     partialTranslated: String,
-    isPaused: Boolean
+    isPaused: Boolean,
+    onExportClick: () -> Unit
 ) {
     Column(
         modifier = Modifier
             .fillMaxSize()
             .padding(horizontal = 20.dp, vertical = 16.dp)
     ) {
-        // Top "● Live" badge
+        // Top status & export row
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.End,
+            horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            val infiniteTransition = rememberInfiniteTransition(label = "LivePulse")
-            val alpha by infiniteTransition.animateFloat(
-                initialValue = 0.4f,
-                targetValue = 1f,
-                animationSpec = infiniteRepeatable(
-                    animation = tween(800, easing = LinearEasing),
-                    repeatMode = RepeatMode.Reverse
-                ),
-                label = "LiveAlpha"
-            )
+            if (segments.isNotEmpty()) {
+                Row(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(PillBg)
+                        .clickable { onExportClick() }
+                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Subtitles,
+                        contentDescription = "Export Subtitles & PDF",
+                        tint = WarmOrange,
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = "Export Subtitles",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = DarkBrownText
+                    )
+                }
+            } else {
+                Spacer(modifier = Modifier.width(1.dp))
+            }
 
-            Box(
-                modifier = Modifier
-                    .size(8.dp)
-                    .clip(CircleShape)
-                    .background(if (isPaused) Color(0xFF9E9E9E) else LiveRed.copy(alpha = alpha))
-            )
-            Spacer(modifier = Modifier.width(5.dp))
-            Text(
-                text = if (isPaused) "Paused" else "Live",
-                fontSize = 13.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = if (isPaused) Color(0xFF757575) else LiveRed
-            )
+            // Top "● Live" badge
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                val infiniteTransition = rememberInfiniteTransition(label = "LivePulse")
+                val alpha by infiniteTransition.animateFloat(
+                    initialValue = 0.4f,
+                    targetValue = 1f,
+                    animationSpec = infiniteRepeatable(
+                        animation = tween(800, easing = LinearEasing),
+                        repeatMode = RepeatMode.Reverse
+                    ),
+                    label = "LiveAlpha"
+                )
+
+                Box(
+                    modifier = Modifier
+                        .size(8.dp)
+                        .clip(CircleShape)
+                        .background(if (isPaused) Color(0xFF9E9E9E) else LiveRed.copy(alpha = alpha))
+                )
+                Spacer(modifier = Modifier.width(5.dp))
+                Text(
+                    text = if (isPaused) "Paused" else "Live",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = if (isPaused) Color(0xFF757575) else LiveRed
+                )
+            }
         }
 
         Spacer(modifier = Modifier.height(10.dp))
@@ -886,6 +993,9 @@ private fun AudioDotMatrix(isLeft: Boolean) {
  */
 @Composable
 private fun DottedWaveformDivider(modifier: Modifier = Modifier) {
+    val dotColor = DottedLineColor
+    val waveColor = WaveformOrange
+
     Canvas(modifier = modifier.height(20.dp)) {
         val y = size.height / 2f
         val totalWidth = size.width
@@ -899,7 +1009,7 @@ private fun DottedWaveformDivider(modifier: Modifier = Modifier) {
         while (x < totalWidth) {
             if (x < waveformCenter - waveformWidth / 2 || x > waveformCenter + waveformWidth / 2) {
                 drawCircle(
-                    color = DottedLineColor,
+                    color = dotColor,
                     radius = dotRadius,
                     center = Offset(x, y)
                 )
@@ -916,7 +1026,7 @@ private fun DottedWaveformDivider(modifier: Modifier = Modifier) {
         barHeights.forEachIndexed { index, barH ->
             val bx = startWaveX + index * barSpacing
             drawRoundRect(
-                color = WaveformOrange,
+                color = waveColor,
                 topLeft = Offset(bx, y - barH / 2f),
                 size = Size(barWidth, barH),
                 cornerRadius = CornerRadius(1.5f, 1.5f)

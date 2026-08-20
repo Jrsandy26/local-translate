@@ -11,13 +11,12 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.ChatBubbleOutline
+import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.History
-import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.NotificationsNone
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.icons.filled.StarBorder
 import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.*
@@ -28,6 +27,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -36,12 +36,12 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.model.ActiveScreen
-import com.example.model.RecentTranslation
+import com.example.model.AppThemeMode
 import com.example.ui.components.GlowingMicButton
 import com.example.ui.components.LanguagePillSelector
 import com.example.ui.components.QuickActionCard
 import com.example.ui.components.RecentTranslationCard
-import com.example.ui.theme.*
+import com.example.ui.theme.AppTheme
 import com.example.ui.viewmodel.TranslationViewModel
 
 @Composable
@@ -50,19 +50,19 @@ fun TranslateHomeScreen(
     onNavigateTo: (ActiveScreen) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val colors = AppTheme.colors
     val sourceLang by viewModel.sourceLanguage.collectAsState()
     val targetLang by viewModel.targetLanguage.collectAsState()
     val inputText by viewModel.homeInputText.collectAsState()
     val translatedText by viewModel.homeTranslatedText.collectAsState()
     val isListening by viewModel.isListening.collectAsState()
     val recentTranslations by viewModel.recentTranslations.collectAsState()
-
-
+    val themeMode by viewModel.themeMode.collectAsState()
 
     LazyColumn(
         modifier = modifier
             .fillMaxSize()
-            .background(AppBackground)
+            .background(colors.background)
             .statusBarsPadding()
             .padding(horizontal = 20.dp),
         contentPadding = PaddingValues(top = 16.dp, bottom = 100.dp)
@@ -74,13 +74,13 @@ fun TranslateHomeScreen(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Title "Translate" with "Trans" (black) and "late" (purple)
+                // Title "Translate" with "Trans" and "late"
                 Column {
                     Text(
                         text = buildAnnotatedString {
                             withStyle(
                                 style = SpanStyle(
-                                    color = TextPrimary,
+                                    color = colors.textPrimary,
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 32.sp
                                 )
@@ -89,7 +89,7 @@ fun TranslateHomeScreen(
                             }
                             withStyle(
                                 style = SpanStyle(
-                                    color = PurplePrimary,
+                                    color = colors.primary,
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 32.sp
                                 )
@@ -102,35 +102,55 @@ fun TranslateHomeScreen(
                     Text(
                         text = "Communication across languages",
                         fontSize = 14.sp,
-                        color = TextSecondary
+                        color = colors.textSecondary
                     )
                 }
 
-                // Top Right Action Buttons
+                // Top Right Action Buttons (Theme Switcher, Notifications, Settings)
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    // Notification Button with Unread Dot
+                    // Theme Quick Toggle Button (Light/Dark mode)
                     Box(
                         modifier = Modifier
                             .size(44.dp)
                             .clip(CircleShape)
-                            .background(Color(0xFFF1F1F8))
-                            .clickable { viewModel.showNotificationsDialog.value = true },
+                            .background(colors.pillBackground)
+                            .clickable { viewModel.toggleThemeMode() }
+                            .testTag("theme_quick_toggle_button"),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = if (colors.isDark) Icons.Default.LightMode else Icons.Default.DarkMode,
+                            contentDescription = if (colors.isDark) "Switch to Light Theme" else "Switch to Dark Theme",
+                            tint = colors.primary,
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.width(10.dp))
+
+                    // Notification Button with Indicator Dot
+                    Box(
+                        modifier = Modifier
+                            .size(44.dp)
+                            .clip(CircleShape)
+                            .background(colors.pillBackground)
+                            .clickable { viewModel.showNotificationsDialog.value = true }
+                            .testTag("notifications_button"),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             imageVector = Icons.Default.NotificationsNone,
                             contentDescription = "Notifications",
-                            tint = TextPrimary,
+                            tint = colors.textPrimary,
                             modifier = Modifier.size(22.dp)
                         )
-                        // Purple Notification Dot
                         Box(
                             modifier = Modifier
                                 .align(Alignment.TopEnd)
                                 .padding(top = 10.dp, end = 12.dp)
                                 .size(8.dp)
                                 .clip(CircleShape)
-                                .background(PurplePrimary)
+                                .background(colors.primary)
                         )
                     }
 
@@ -141,14 +161,15 @@ fun TranslateHomeScreen(
                         modifier = Modifier
                             .size(44.dp)
                             .clip(CircleShape)
-                            .background(Color(0xFFF1F1F8))
-                            .clickable { viewModel.showSettingsDialog.value = true },
+                            .background(colors.pillBackground)
+                            .clickable { viewModel.showSettingsDialog.value = true }
+                            .testTag("settings_button"),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             imageVector = Icons.Outlined.Settings,
                             contentDescription = "Settings",
-                            tint = TextPrimary,
+                            tint = colors.textPrimary,
                             modifier = Modifier.size(22.dp)
                         )
                     }
@@ -164,12 +185,12 @@ fun TranslateHomeScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .shadow(
-                        elevation = 8.dp,
+                        elevation = if (colors.isDark) 2.dp else 8.dp,
                         shape = RoundedCornerShape(28.dp),
-                        spotColor = Color(0x0D6C5CE7)
+                        spotColor = colors.primary.copy(alpha = 0.15f)
                     ),
                 shape = RoundedCornerShape(28.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White)
+                colors = CardDefaults.cardColors(containerColor = colors.surface)
             ) {
                 Column(
                     modifier = Modifier
@@ -185,13 +206,13 @@ fun TranslateHomeScreen(
                             modifier = Modifier
                                 .size(32.dp)
                                 .clip(RoundedCornerShape(10.dp))
-                                .background(PurpleLight),
+                                .background(colors.primaryLight),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 imageVector = Icons.Default.AutoAwesome,
                                 contentDescription = null,
-                                tint = PurplePrimary,
+                                tint = colors.primary,
                                 modifier = Modifier.size(18.dp)
                             )
                         }
@@ -202,7 +223,7 @@ fun TranslateHomeScreen(
                             text = "Enter text to translate",
                             fontSize = 15.sp,
                             fontWeight = FontWeight.SemiBold,
-                            color = PurplePrimary
+                            color = colors.primary
                         )
                     }
 
@@ -218,7 +239,7 @@ fun TranslateHomeScreen(
                             Text(
                                 text = "Type, paste or speak to translate...",
                                 fontSize = 16.sp,
-                                color = TextMuted,
+                                color = colors.textMuted,
                                 lineHeight = 22.sp
                             )
                         }
@@ -228,10 +249,10 @@ fun TranslateHomeScreen(
                             onValueChange = { viewModel.onHomeInputChanged(it) },
                             textStyle = androidx.compose.ui.text.TextStyle(
                                 fontSize = 16.sp,
-                                color = TextPrimary,
+                                color = colors.textPrimary,
                                 lineHeight = 22.sp
                             ),
-                            cursorBrush = SolidColor(PurplePrimary),
+                            cursorBrush = SolidColor(colors.primary),
                             modifier = Modifier.fillMaxWidth()
                         )
                     }
@@ -243,7 +264,7 @@ fun TranslateHomeScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clip(RoundedCornerShape(16.dp))
-                                .background(Color(0xFFF7F8FC))
+                                .background(colors.pillBackground)
                                 .padding(12.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
@@ -252,14 +273,14 @@ fun TranslateHomeScreen(
                                     text = targetLang.name.uppercase(),
                                     fontSize = 10.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = PurplePrimary
+                                    color = colors.primary
                                 )
                                 Spacer(modifier = Modifier.height(2.dp))
                                 Text(
                                     text = translatedText,
                                     fontSize = 15.sp,
                                     fontWeight = FontWeight.SemiBold,
-                                    color = TextPrimary
+                                    color = colors.textPrimary
                                 )
                             }
                             IconButton(
@@ -269,7 +290,7 @@ fun TranslateHomeScreen(
                                 Icon(
                                     imageVector = Icons.Default.VolumeUp,
                                     contentDescription = "Speak",
-                                    tint = PurplePrimary,
+                                    tint = colors.primary,
                                     modifier = Modifier.size(20.dp)
                                 )
                             }
@@ -316,7 +337,7 @@ fun TranslateHomeScreen(
                 text = "Quick Actions",
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Bold,
-                color = TextPrimary
+                color = colors.textPrimary
             )
 
             Spacer(modifier = Modifier.height(14.dp))
@@ -335,8 +356,8 @@ fun TranslateHomeScreen(
                         title = "Live Translate",
                         subtitle = "Real-time\nconversation",
                         icon = Icons.Default.GraphicEq,
-                        iconColor = AccentLive,
-                        iconBgColor = AccentLiveBg,
+                        iconColor = colors.accentLive,
+                        iconBgColor = colors.accentLiveBg,
                         onClick = { onNavigateTo(ActiveScreen.LIVE_TRANSLATE) },
                         modifier = Modifier.weight(1f)
                     )
@@ -345,8 +366,8 @@ fun TranslateHomeScreen(
                         title = "Conversation",
                         subtitle = "Two-way\ntranslation",
                         icon = Icons.Default.ChatBubbleOutline,
-                        iconColor = AccentConversation,
-                        iconBgColor = AccentConversationBg,
+                        iconColor = colors.accentConversation,
+                        iconBgColor = colors.accentConversationBg,
                         onClick = { onNavigateTo(ActiveScreen.CONVERSATION) },
                         modifier = Modifier.weight(1f)
                     )
@@ -361,8 +382,8 @@ fun TranslateHomeScreen(
                         title = "History",
                         subtitle = "View your past\ntranslations",
                         icon = Icons.Default.History,
-                        iconColor = AccentHistory,
-                        iconBgColor = AccentHistoryBg,
+                        iconColor = colors.accentHistory,
+                        iconBgColor = colors.accentHistoryBg,
                         onClick = { onNavigateTo(ActiveScreen.HISTORY) },
                         modifier = Modifier.weight(1f)
                     )
@@ -371,8 +392,8 @@ fun TranslateHomeScreen(
                         title = "Saved",
                         subtitle = "Your saved\ntranslations",
                         icon = Icons.Default.Star,
-                        iconColor = AccentSaved,
-                        iconBgColor = AccentSavedBg,
+                        iconColor = colors.accentSaved,
+                        iconBgColor = colors.accentSavedBg,
                         onClick = { onNavigateTo(ActiveScreen.SAVED) },
                         modifier = Modifier.weight(1f)
                     )
@@ -393,14 +414,14 @@ fun TranslateHomeScreen(
                     text = "Recent Translations",
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
-                    color = TextPrimary
+                    color = colors.textPrimary
                 )
 
                 Text(
                     text = "See all",
                     fontSize = 14.sp,
                     fontWeight = FontWeight.SemiBold,
-                    color = PurplePrimary,
+                    color = colors.primary,
                     modifier = Modifier
                         .clickable { onNavigateTo(ActiveScreen.HISTORY) }
                         .padding(vertical = 4.dp, horizontal = 6.dp)
@@ -418,7 +439,7 @@ fun TranslateHomeScreen(
                         .fillMaxWidth()
                         .padding(bottom = 16.dp),
                     shape = RoundedCornerShape(20.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color.White)
+                    colors = CardDefaults.cardColors(containerColor = colors.surface)
                 ) {
                     Column(
                         modifier = Modifier
@@ -430,7 +451,7 @@ fun TranslateHomeScreen(
                         Icon(
                             imageVector = Icons.Default.AutoAwesome,
                             contentDescription = null,
-                            tint = PurplePrimary.copy(alpha = 0.3f),
+                            tint = colors.primary.copy(alpha = 0.4f),
                             modifier = Modifier.size(40.dp)
                         )
                         Spacer(modifier = Modifier.height(12.dp))
@@ -438,13 +459,13 @@ fun TranslateHomeScreen(
                             text = "No recent translations",
                             fontSize = 15.sp,
                             fontWeight = FontWeight.Bold,
-                            color = TextPrimary
+                            color = colors.textPrimary
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
                             text = "Your offline translation history will show up here.",
                             fontSize = 13.sp,
-                            color = TextSecondary,
+                            color = colors.textSecondary,
                             textAlign = TextAlign.Center
                         )
                     }
