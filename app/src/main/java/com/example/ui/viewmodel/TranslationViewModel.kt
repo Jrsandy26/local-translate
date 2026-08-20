@@ -35,16 +35,19 @@ class TranslationViewModel(application: Application) : AndroidViewModel(applicat
     private val _activeScreen = MutableStateFlow(ActiveScreen.HOME)
     val activeScreen: StateFlow<ActiveScreen> = _activeScreen.asStateFlow()
 
+    // Navigation back stack for system Android back gesture & back button
+    private val screenBackStack = mutableListOf<ActiveScreen>()
+
     // Home translation state
     val homeInputText = MutableStateFlow("")
     val homeTranslatedText = MutableStateFlow("")
     val isTranslating = MutableStateFlow(false)
 
     // Language selection
-    private val _sourceLanguage = MutableStateFlow(Language.findByCode("en"))
+    private val _sourceLanguage = MutableStateFlow(Language.findByCode("ja"))
     val sourceLanguage: StateFlow<Language> = _sourceLanguage.asStateFlow()
 
-    private val _targetLanguage = MutableStateFlow(Language.findByCode("ja"))
+    private val _targetLanguage = MutableStateFlow(Language.findByCode("en"))
     val targetLanguage: StateFlow<Language> = _targetLanguage.asStateFlow()
 
     // Voice & Speech Recognition
@@ -62,6 +65,11 @@ class TranslationViewModel(application: Application) : AndroidViewModel(applicat
     val liveActiveSpeaker = MutableStateFlow(1) // 1: User/Source, 2: Partner/Target
     val livePartialText = MutableStateFlow("")
     val livePartialTranslated = MutableStateFlow("")
+    val isLiveSessionRunning = MutableStateFlow(false)
+    val isLiveSessionPaused = MutableStateFlow(false)
+    val liveTimerSeconds = MutableStateFlow(14)
+    val recordAudioChecked = MutableStateFlow(true)
+    private var liveTimerJob: Job? = null
 
     // Conversation State (Two-Way)
     val speaker1Text = MutableStateFlow("")
@@ -110,19 +118,19 @@ class TranslationViewModel(application: Application) : AndroidViewModel(applicat
 
         speechHelper = SpeechRecognitionHelper(
             context = application,
-            onPartialResult = { partial ->
+            onPartialSpeechResult = { partial ->
                 handlePartialSpeech(partial)
             },
-            onFinalResult = { final ->
+            onFinalSpeechResult = { final ->
                 handleFinalSpeech(final)
             },
-            onRmsChanged = { rms ->
+            onRmsLevelChanged = { rms ->
                 _rmsLevel.value = rms
             },
             onListeningStateChanged = { listening ->
                 _isListening.value = listening
             },
-            onBufferReceived = { buffer ->
+            onAudioBufferReceived = { buffer ->
                 if (buffer != null && buffer.isNotEmpty()) {
                     warmupModels()
                 }
@@ -134,7 +142,49 @@ class TranslationViewModel(application: Application) : AndroidViewModel(applicat
     }
 
     fun setActiveScreen(screen: ActiveScreen) {
-        _activeScreen.value = screen
+        if (_activeScreen.value != screen) {
+            screenBackStack.add(_activeScreen.value)
+            _activeScreen.value = screen
+        }
+    }
+
+    /**
+     * Handles Android back gestures or UI back buttons.
+     * Returns true if back navigation was handled internally, false if app should exit.
+     */
+    fun navigateBack(): Boolean {
+        // 1. Close dialogs or sheets first if open
+        if (showLanguageSelector.value) {
+            showLanguageSelector.value = false
+            return true
+        }
+        if (showSettingsDialog.value) {
+            showSettingsDialog.value = false
+            return true
+        }
+
+        // 2. Stop ongoing speech recognition if active in sub-screens
+        if (isListening.value) {
+            speechHelper?.stopListening()
+        }
+
+        // 3. Navigate back through backstack
+        while (screenBackStack.isNotEmpty()) {
+            val previousScreen = screenBackStack.removeAt(screenBackStack.size - 1)
+            if (previousScreen != _activeScreen.value) {
+                _activeScreen.value = previousScreen
+                return true
+            }
+        }
+
+        // 4. If on a non-home tab and stack is empty, return to HOME
+        if (_activeScreen.value != ActiveScreen.HOME) {
+            _activeScreen.value = ActiveScreen.HOME
+            return true
+        }
+
+        // Already at root HOME with no overlays
+        return false
     }
 
     fun setSourceLanguage(language: Language) {
@@ -196,6 +246,8 @@ class TranslationViewModel(application: Application) : AndroidViewModel(applicat
                         targetLang = _targetLanguage.value.code
                     )
                 }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                // Ignore debounce cancellations cleanly without error logs
             } catch (e: Exception) {
                 Log.e("TranslationVM", "Translation error", e)
             } finally {
@@ -211,6 +263,85 @@ class TranslationViewModel(application: Application) : AndroidViewModel(applicat
             val locale = Locale.forLanguageTag(_sourceLanguage.value.code)
             speechHelper?.startListening(locale)
         }
+    }
+
+    fun startLiveSession() {
+        isLiveSessionRunning.value = true
+        isLiveSessionPaused.value = false
+        if (liveSegments.value.isEmpty() && _sourceLanguage.value.code == "ja") {
+            populateDemoSegments()
+        }
+        startLiveTimer()
+        val locale = Locale.forLanguageTag(_sourceLanguage.value.code)
+        speechHelper?.startListening(locale)
+    }
+
+    fun pauseLiveSession() {
+        isLiveSessionPaused.value = true
+        speechHelper?.stopListening()
+    }
+
+    fun resumeLiveSession() {
+        isLiveSessionPaused.value = false
+        val locale = Locale.forLanguageTag(_sourceLanguage.value.code)
+        speechHelper?.startListening(locale)
+    }
+
+    fun stopLiveSession() {
+        isLiveSessionRunning.value = false
+        isLiveSessionPaused.value = false
+        liveTimerJob?.cancel()
+        liveTimerJob = null
+        speechHelper?.stopListening()
+    }
+
+    fun resetLiveTranscript() {
+        liveSegments.value = emptyList()
+        livePartialText.value = ""
+        livePartialTranslated.value = ""
+        liveTimerSeconds.value = 0
+    }
+
+    fun toggleRecordAudio() {
+        recordAudioChecked.value = !recordAudioChecked.value
+    }
+
+    private fun startLiveTimer() {
+        liveTimerJob?.cancel()
+        liveTimerJob = viewModelScope.launch {
+            while (true) {
+                delay(1000)
+                if (isLiveSessionRunning.value && !isLiveSessionPaused.value) {
+                    liveTimerSeconds.value += 1
+                }
+            }
+        }
+    }
+
+    fun populateDemoSegments() {
+        liveSegments.value = listOf(
+            TranscriptSegment(
+                sessionId = 0,
+                speaker = "日本語",
+                sourceText = "先生、カバ。",
+                translatedText = "Teacher, hippo.",
+                isSourceSpeaker = true
+            ),
+            TranscriptSegment(
+                sessionId = 0,
+                speaker = "日本語",
+                sourceText = "Shinji、virmal。",
+                translatedText = "Shinji, Virmal.",
+                isSourceSpeaker = true
+            ),
+            TranscriptSegment(
+                sessionId = 0,
+                speaker = "日本語",
+                sourceText = "うん。",
+                translatedText = "Yeah.",
+                isSourceSpeaker = true
+            )
+        )
     }
 
     private fun handlePartialSpeech(partial: String) {
@@ -370,5 +501,6 @@ class TranslationViewModel(application: Application) : AndroidViewModel(applicat
         super.onCleared()
         speechHelper?.destroy()
         ttsHelper?.shutdown()
+        GoogleTranslationEngine.close()
     }
 }

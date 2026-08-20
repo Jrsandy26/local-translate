@@ -13,11 +13,11 @@ import java.util.Locale
 
 class SpeechRecognitionHelper(
     private val context: Context,
-    private val onPartialResult: (String) -> Unit,
-    private val onFinalResult: (String) -> Unit,
-    private val onRmsChanged: (Float) -> Unit,
+    private val onPartialSpeechResult: (String) -> Unit,
+    private val onFinalSpeechResult: (String) -> Unit,
+    private val onRmsLevelChanged: (Float) -> Unit,
     private val onListeningStateChanged: (Boolean) -> Unit,
-    private val onBufferReceived: ((ByteArray?) -> Unit)? = null
+    private val onAudioBufferReceived: ((ByteArray?) -> Unit)? = null
 ) {
     private val mainHandler = Handler(Looper.getMainLooper())
     private var speechRecognizer: SpeechRecognizer? = null
@@ -43,10 +43,10 @@ class SpeechRecognitionHelper(
 
                 speechRecognizer?.startListening(intent)
                 isListening = true
-                onListeningStateChanged(true)
+                this@SpeechRecognitionHelper.onListeningStateChanged(true)
             } catch (e: Exception) {
                 Log.e("SpeechRecognition", "Error starting speech recognizer", e)
-                onListeningStateChanged(false)
+                this@SpeechRecognitionHelper.onListeningStateChanged(false)
             }
         }
     }
@@ -59,7 +59,7 @@ class SpeechRecognitionHelper(
                 Log.e("SpeechRecognition", "Error stopping listening", e)
             }
             isListening = false
-            onListeningStateChanged(false)
+            this@SpeechRecognitionHelper.onListeningStateChanged(false)
         }
     }
 
@@ -72,7 +72,7 @@ class SpeechRecognitionHelper(
                 Log.e("SpeechRecognition", "Error destroying speech recognizer", e)
             }
             isListening = false
-            onListeningStateChanged(false)
+            this@SpeechRecognitionHelper.onListeningStateChanged(false)
         }
     }
 
@@ -84,12 +84,12 @@ class SpeechRecognitionHelper(
 
             override fun onRmsChanged(rmsdB: Float) {
                 val normalized = ((rmsdB + 2f) / 12f).coerceIn(0.1f, 1f)
-                onRmsChanged(normalized)
+                this@SpeechRecognitionHelper.onRmsLevelChanged.invoke(normalized)
             }
 
             override fun onBufferReceived(buffer: ByteArray?) {
                 try {
-                    onBufferReceived?.invoke(buffer)
+                    this@SpeechRecognitionHelper.onAudioBufferReceived?.invoke(buffer)
                 } catch (_: Throwable) {}
             }
 
@@ -97,7 +97,7 @@ class SpeechRecognitionHelper(
 
             override fun onError(error: Int) {
                 Log.w("SpeechRecognition", "Recognition error: $error")
-                onListeningStateChanged(false)
+                this@SpeechRecognitionHelper.onListeningStateChanged.invoke(false)
                 isListening = false
             }
 
@@ -105,9 +105,9 @@ class SpeechRecognitionHelper(
                 val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                 val finalResult = matches?.firstOrNull() ?: ""
                 if (finalResult.isNotBlank()) {
-                    onFinalResult(finalResult)
+                    this@SpeechRecognitionHelper.onFinalSpeechResult.invoke(finalResult)
                 }
-                onListeningStateChanged(false)
+                this@SpeechRecognitionHelper.onListeningStateChanged.invoke(false)
                 isListening = false
             }
 
@@ -115,7 +115,7 @@ class SpeechRecognitionHelper(
                 val matches = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                 val partialText = matches?.firstOrNull() ?: ""
                 if (partialText.isNotBlank()) {
-                    onPartialResult(partialText)
+                    this@SpeechRecognitionHelper.onPartialSpeechResult.invoke(partialText)
                 }
             }
 

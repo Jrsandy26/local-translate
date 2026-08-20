@@ -64,10 +64,14 @@ object GoogleTranslationEngine {
             RemoteModelManager.getInstance().isModelDownloaded(model)
                 .addOnSuccessListener { isDownloaded ->
                     downloadedModelsCache[langCode] = isDownloaded
-                    continuation.resume(isDownloaded)
+                    if (continuation.isActive) {
+                        continuation.resume(isDownloaded)
+                    }
                 }
                 .addOnFailureListener {
-                    continuation.resume(false)
+                    if (continuation.isActive) {
+                        continuation.resume(false)
+                    }
                 }
         }
     }
@@ -134,16 +138,22 @@ object GoogleTranslationEngine {
                 .addOnSuccessListener {
                     translator.translate(trimmed)
                         .addOnSuccessListener { translatedResult ->
-                            continuation.resume(translatedResult)
+                            if (continuation.isActive) {
+                                continuation.resume(translatedResult)
+                            }
                         }
                         .addOnFailureListener { e ->
                             Log.w(TAG, "ML Kit translation failed: ${e.message}, using fallback")
-                            continuation.resume(getSmartFallback(trimmed, targetLangCode))
+                            if (continuation.isActive) {
+                                continuation.resume(getSmartFallback(trimmed, targetLangCode))
+                            }
                         }
                 }
                 .addOnFailureListener { e ->
                     Log.w(TAG, "ML Kit model download failed: ${e.message}, using fallback")
-                    continuation.resume(getSmartFallback(trimmed, targetLangCode))
+                    if (continuation.isActive) {
+                        continuation.resume(getSmartFallback(trimmed, targetLangCode))
+                    }
                 }
         }
     }
@@ -164,5 +174,14 @@ object GoogleTranslationEngine {
             "ko" -> "번역: $text"
             else -> text
         }
+    }
+
+    fun close() {
+        for ((_, translator) in translatorCache) {
+            try {
+                translator.close()
+            } catch (_: Exception) {}
+        }
+        translatorCache.clear()
     }
 }

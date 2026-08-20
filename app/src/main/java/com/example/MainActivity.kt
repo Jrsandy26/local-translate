@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -42,6 +43,13 @@ class MainActivity : ComponentActivity() {
                 val showSettings by viewModel.showSettingsDialog.collectAsState()
                 val speed by viewModel.speechSpeed.collectAsState()
                 val pitch by viewModel.speechPitch.collectAsState()
+
+                // Android System Navigation Gesture / Back Button Handler
+                // Intercepts back gestures when not at root home screen or when dialogs/sheets are open
+                val isBackNavigationActive = activeScreen != ActiveScreen.HOME || showLangSelector || showSettings
+                BackHandler(enabled = isBackNavigationActive) {
+                    viewModel.navigateBack()
+                }
 
                 // Permission launcher for microphone
                 val permissionLauncher = rememberLauncherForActivityResult(
@@ -96,27 +104,27 @@ class MainActivity : ComponentActivity() {
                                 ActiveScreen.LIVE_TRANSLATE -> {
                                     LiveTranslateScreen(
                                         viewModel = viewModel,
-                                        onBack = { viewModel.setActiveScreen(ActiveScreen.HOME) }
+                                        onBack = { viewModel.navigateBack() }
                                     )
                                 }
                                 ActiveScreen.CONVERSATION -> {
                                     ConversationScreen(
                                         viewModel = viewModel,
-                                        onBack = { viewModel.setActiveScreen(ActiveScreen.HOME) }
+                                        onBack = { viewModel.navigateBack() }
                                     )
                                 }
                                 ActiveScreen.HISTORY -> {
                                     HistoryScreen(
                                         viewModel = viewModel,
                                         onlyFavorites = false,
-                                        onBack = { viewModel.setActiveScreen(ActiveScreen.HOME) }
+                                        onBack = { viewModel.navigateBack() }
                                     )
                                 }
                                 ActiveScreen.SAVED -> {
                                     HistoryScreen(
                                         viewModel = viewModel,
                                         onlyFavorites = true,
-                                        onBack = { viewModel.setActiveScreen(ActiveScreen.HOME) }
+                                        onBack = { viewModel.navigateBack() }
                                     )
                                 }
                                 ActiveScreen.LANGUAGES -> {
