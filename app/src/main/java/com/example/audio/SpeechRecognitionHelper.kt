@@ -92,12 +92,9 @@ class SpeechRecognitionHelper(
                         putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, context.packageName)
                     }
                     speechRecognizer?.startListening(intent)
-                } else {
-                    scheduleSimulatedSpeech()
                 }
             } catch (e: Throwable) {
-                Log.e("SpeechRecognition", "Error starting listening, utilizing continuous stream mode", e)
-                scheduleSimulatedSpeech()
+                Log.e("SpeechRecognition", "Error starting listening", e)
             }
         }
     }
@@ -226,11 +223,6 @@ class SpeechRecognitionHelper(
         override fun onError(error: Int) {
             Log.d("SpeechRecognition", "Speech error code: $error")
             consecutiveErrors++
-
-            // If error occurred (e.g. error 5 in emulator), keep listening active & run continuous voice stream
-            if (isListening) {
-                scheduleSimulatedSpeech()
-            }
         }
 
         override fun onResults(results: Bundle?) {
@@ -258,7 +250,7 @@ class SpeechRecognitionHelper(
                             }
                             speechRecognizer?.startListening(intent)
                         } catch (e: Throwable) {
-                            scheduleSimulatedSpeech()
+                            Log.e("SpeechRecognition", "Failed to restart speech recognizer listening", e)
                         }
                     }
                 }, 400)

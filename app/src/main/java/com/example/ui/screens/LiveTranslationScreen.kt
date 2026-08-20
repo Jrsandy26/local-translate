@@ -47,6 +47,8 @@ import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.ui.draw.rotate
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -416,6 +418,13 @@ private fun LiveLanguageSelectorRow(
     onTargetClick: () -> Unit,
     onSwapClick: () -> Unit
 ) {
+    var rotationAngle by remember { mutableStateOf(0f) }
+    val animatedRotation by animateFloatAsState(
+        targetValue = rotationAngle,
+        animationSpec = tween(durationMillis = 400),
+        label = "rotation"
+    )
+
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.Center,
@@ -434,11 +443,15 @@ private fun LiveLanguageSelectorRow(
         Box(
             modifier = Modifier
                 .size(36.dp)
+                .rotate(animatedRotation)
                 .clip(CircleShape)
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = ripple(color = Color.White.copy(alpha = 0.3f)),
-                    onClick = onSwapClick
+                    onClick = {
+                        rotationAngle += 180f
+                        onSwapClick()
+                    }
                 ),
             contentAlignment = Alignment.Center
         ) {

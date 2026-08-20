@@ -192,7 +192,7 @@ class TranslationViewModel(application: Application) : AndroidViewModel(applicat
                     _currentSession.value = sessionWithSegments
                     _sourceLanguage.value = Language.findByCode(sessionWithSegments.session.sourceLanguageCode)
                     _targetLanguage.value = Language.findByCode(sessionWithSegments.session.targetLanguageCode)
-                    _totalDurationSec.value = sessionWithSegments.session.durationSeconds.coerceAtLeast(60)
+                    _totalDurationSec.value = sessionWithSegments.session.durationSeconds
                 }
             }
         }
@@ -356,7 +356,9 @@ class TranslationViewModel(application: Application) : AndroidViewModel(applicat
 
         val sessId = _currentSessionId.value
         if (recordAudioEnabled.value && sessId != null) {
-            val audioPath = audioRecorderHelper.startRecording(sessId)
+            val audioPath = audioRecorderHelper.startRecording(sessId) { rms ->
+                rmsLevel.value = rms
+            }
             if (audioPath != null) {
                 viewModelScope.launch {
                     repository.updateSessionAudioPath(sessId, audioPath)

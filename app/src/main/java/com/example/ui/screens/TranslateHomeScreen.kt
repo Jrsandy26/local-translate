@@ -40,6 +40,9 @@ import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.ui.draw.rotate
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -82,6 +85,12 @@ fun TranslateHomeScreen(viewModel: TranslationViewModel) {
     val isSelectingSourceLanguage by viewModel.isSelectingSourceLanguage.collectAsState()
 
     var showDictationDialog by remember { mutableStateOf(false) }
+    var rotationAngle by remember { mutableStateOf(0f) }
+    val animatedRotation by animateFloatAsState(
+        targetValue = rotationAngle,
+        animationSpec = tween(durationMillis = 400),
+        label = "rotation"
+    )
 
     GlassAtmosphereBackground(modifier = Modifier.fillMaxSize()) {
         Column(
@@ -168,7 +177,11 @@ fun TranslateHomeScreen(viewModel: TranslationViewModel) {
                         icon = Icons.Default.SwapHoriz,
                         contentDescription = "Swap Languages",
                         size = 38.dp,
-                        onClick = { viewModel.swapLanguages() }
+                        modifier = Modifier.rotate(animatedRotation),
+                        onClick = {
+                            rotationAngle += 180f
+                            viewModel.swapLanguages()
+                        }
                     )
 
                     // Target Language Selector

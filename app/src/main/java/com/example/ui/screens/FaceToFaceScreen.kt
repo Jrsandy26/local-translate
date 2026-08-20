@@ -32,6 +32,9 @@ import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.ui.draw.rotate
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -75,6 +78,12 @@ fun FaceToFaceScreen(viewModel: TranslationViewModel) {
 
     var isChatViewMode by remember { mutableStateOf(false) }
     var showSpeechDialogSpeaker by remember { mutableStateOf<Int?>(null) }
+    var rotationAngle by remember { mutableStateOf(0f) }
+    val animatedRotation by animateFloatAsState(
+        targetValue = rotationAngle,
+        animationSpec = tween(durationMillis = 400),
+        label = "rotation"
+    )
 
     val segments = remember(currentSession) {
         currentSession?.getSortedSegments() ?: emptyList()
@@ -153,7 +162,11 @@ fun FaceToFaceScreen(viewModel: TranslationViewModel) {
                     icon = Icons.Default.SwapHoriz,
                     contentDescription = "Swap",
                     size = 32.dp,
-                    onClick = { viewModel.swapLanguages() }
+                    modifier = Modifier.rotate(animatedRotation),
+                    onClick = {
+                        rotationAngle += 180f
+                        viewModel.swapLanguages()
+                    }
                 )
 
                 Spacer(modifier = Modifier.width(10.dp))

@@ -8,13 +8,27 @@ Riva Translate is a state-of-the-art Android application engineered with **Kotli
 
 ## 📱 Screenshots Gallery
 
+### 🎨 Material 3 Expressive Screens (New Color Scheme Background)
+
 | Home Text Translation | Live Continuous Audio | Face-to-Face Conversation |
 | :---: | :---: | :---: |
-| <img src="screenshots/home_translation.jpg" width="260" alt="Home Screen"/> | <img src="screenshots/live_session.jpg" width="260" alt="Live Session"/> | <img src="screenshots/face_to_face.jpg" width="260" alt="Face to Face"/> |
+| ![M3 Expressive Home Screen](screenshots/home_translation_new.png) | ![M3 Expressive Live Session](screenshots/live_session_new.png) | ![M3 Expressive Face to Face](screenshots/face_to_face_new.png) |
 
-| Language Learning Studio | Settings & Preferences |
-| :---: | :---: |
-| <img src="screenshots/language_learning.jpg" width="260" alt="Language Learning"/> | <img src="screenshots/settings_screen.jpg" width="260" alt="Settings Screen"/> |
+| Language Learning Studio | Settings & Preferences | Offline Language Packs | Translation History |
+| :---: | :---: | :---: | :---: |
+| ![M3 Expressive Language Learning](screenshots/language_learning_new.png) | ![M3 Expressive Settings Screen](screenshots/settings_screen_new.png) | ![M3 Expressive Offline Language Packs](screenshots/offline_language_packs_new.png) | ![M3 Expressive Translation History](screenshots/translation_history_new.png) |
+
+---
+
+### ✨ Classic Glassmorphism Screens (Original Textured Background)
+
+| Home Text Translation | Live Continuous Audio | Face-to-Face Conversation |
+| :---: | :---: | :---: |
+| ![Classic Home Screen](screenshots/home_translation.png) | ![Classic Live Session](screenshots/live_session.png) | ![Classic Face to Face](screenshots/face_to_face.png) |
+
+| Language Learning Studio | Settings & Preferences | Offline Language Packs | Translation History |
+| :---: | :---: | :---: | :---: |
+| ![Classic Language Learning](screenshots/language_learning.png) | ![Classic Settings Screen](screenshots/settings_screen.png) | ![Classic Offline Language Packs](screenshots/offline_language_packs.png) | ![Classic Translation History](screenshots/translation_history.png) |
 
 ---
 
