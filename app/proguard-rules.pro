@@ -7,9 +7,9 @@
 # 2. Room Database and DAOs
 # Keep the database definition and the generated implementation
 -keep class * extends androidx.room.RoomDatabase
--keep class * implements com.example.data.db.TranslationDao
--keep class com.example.data.db.** { *; }
--keep class com.example.model.** { *; }
+-keep class * implements com.rivatranslate.data.db.TranslationDao
+-keep class com.rivatranslate.data.db.** { *; }
+-keep class com.rivatranslate.model.** { *; }
 -dontwarn androidx.room.paging.**
 
 # 3. Kotlinx Serialization
@@ -37,6 +37,14 @@
 -dontwarn com.google.mlkit.**
 -dontwarn com.google.android.gms.**
 
-# 5. General optimization settings for real-world devices
+# 5. Services and Providers
+-keep class com.rivatranslate.service.LiveTranslationService { *; }
+-keep class androidx.core.content.FileProvider { *; }
+
+# 6. General optimization settings for real-world devices
 -repackageclasses ''
 -allowaccessmodification
+
+# 7. Additions for stability with R8
+-keepattributes SourceFile,LineNumberTable
+-keepattributes *Annotation*

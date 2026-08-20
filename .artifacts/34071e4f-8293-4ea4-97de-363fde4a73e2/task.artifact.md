@@ -1,0 +1,23 @@
+# Production Setup Tasks
+
+- [x] Refactor Namespace from `com.example` to `com.rivatranslate`
+    - [x] Update directory structure
+    - [x] Update package declarations in Kotlin files
+    - [x] Update imports in Kotlin files
+    - [x] Update namespace in `app/build.gradle.kts`
+    - [x] Update `AndroidManifest.xml` references
+- [x] Update Application ID and Versioning
+    - [x] Update `applicationId` in `app/build.gradle.kts`
+    - [x] Add `applicationIdSuffix` for debug builds
+    - [x] Set final `versionCode` and `versionName`
+- [x] Configure Release Signing
+    - [x] Create `keystore.properties.template`
+    - [x] Add signing logic to `app/build.gradle.kts`
+- [x] Optimize Proguard/R8 Rules
+    - [x] Refine `app/proguard-rules.pro`
+- [x] Production Manifest Review
+    - [x] Audit permissions and backup settings in `AndroidManifest.xml`
+- [x] Verification
+    - [x] Run `./gradlew assembleDebug` (Release requires keystore)
+    - [x] Verify project builds after refactoring
+    - [x] Verify configuration for side-by-side installation (namespace vs applicationId)
