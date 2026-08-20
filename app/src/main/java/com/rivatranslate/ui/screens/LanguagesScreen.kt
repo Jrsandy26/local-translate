@@ -9,6 +9,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.CloudDownload
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -33,15 +34,11 @@ fun LanguagesScreen(
     viewModel: TranslationViewModel,
     modifier: Modifier = Modifier
 ) {
-    val coroutineScope = rememberCoroutineScope()
-    var downloadedCodes by remember { mutableStateOf(setOf("en")) }
+    val downloadedCodes by viewModel.downloadedCodes.collectAsState()
+    val downloadingCodes by viewModel.downloadingCodes.collectAsState()
 
     LaunchedEffect(Unit) {
-        Language.ALL_LANGUAGES.forEach { lang ->
-            if (GoogleTranslationEngine.isModelDownloaded(lang.code)) {
-                downloadedCodes = downloadedCodes + lang.code
-            }
-        }
+        viewModel.refreshDownloadedModels()
     }
 
     Column(
@@ -51,7 +48,7 @@ fun LanguagesScreen(
             .statusBarsPadding()
             .padding(horizontal = 20.dp)
     ) {
-        // Title
+        // ... Title and Description ...
         Text(
             text = "Language Packs",
             fontSize = 24.sp,
@@ -71,74 +68,120 @@ fun LanguagesScreen(
             contentPadding = PaddingValues(bottom = 100.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            items(Language.ALL_LANGUAGES) { lang ->
+            items(
+                items = Language.ALL_LANGUAGES,
+                key = { it.code } // Add key for better performance
+            ) { lang ->
                 val isDownloaded = downloadedCodes.contains(lang.code)
+                val isDownloading = downloadingCodes.contains(lang.code)
 
-                Card(
-                    shape = RoundedCornerShape(18.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color.White),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
+                LanguageItem(
+                    lang = lang,
+                    isDownloaded = isDownloaded,
+                    isDownloading = isDownloading,
+                    onDownload = { viewModel.downloadLanguageModel(lang.code) },
+                    onDelete = { viewModel.deleteLanguageModel(lang.code) }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun LanguageItem(
+    lang: Language,
+    isDownloaded: Boolean,
+    isDownloading: Boolean,
+    onDownload: () -> Unit,
+    onDelete: () -> Unit
+) {
+    Card(
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(text = lang.flag, fontSize = 28.sp)
+                Spacer(modifier = Modifier.width(14.dp))
+                Column {
+                    Text(
+                        text = lang.name,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = TextPrimary
+                    )
+                    Text(
+                        text = lang.nativeName,
+                        fontSize = 13.sp,
+                        color = TextSecondary
+                    )
+                }
+            }
+
+            Box(contentAlignment = Alignment.Center) {
+                if (isDownloading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(24.dp),
+                        strokeWidth = 2.dp,
+                        color = PurplePrimary
+                    )
+                } else if (isDownloaded) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(text = lang.flag, fontSize = 28.sp)
-                            Spacer(modifier = Modifier.width(14.dp))
-                            Column {
-                                Text(
-                                    text = lang.name,
-                                    fontSize = 16.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = TextPrimary
-                                )
-                                Text(
-                                    text = lang.nativeName,
-                                    fontSize = 13.sp,
-                                    color = TextSecondary
-                                )
-                            }
+                            Icon(
+                                imageVector = Icons.Default.CheckCircle,
+                                contentDescription = "Downloaded",
+                                tint = Color(0xFF10B981),
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "Ready",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color(0xFF10B981)
+                            )
                         }
 
-                        if (isDownloaded) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (lang.code != "en") {
+                            Spacer(modifier = Modifier.width(12.dp))
+                            IconButton(
+                                onClick = onDelete,
+                                modifier = Modifier.size(32.dp)
+                            ) {
                                 Icon(
-                                    imageVector = Icons.Default.CheckCircle,
-                                    contentDescription = "Downloaded",
-                                    tint = Color(0xFF10B981),
+                                    imageVector = Icons.Default.Delete,
+                                    contentDescription = "Delete Model",
+                                    tint = Color.Gray.copy(alpha = 0.6f),
                                     modifier = Modifier.size(20.dp)
                                 )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(
-                                    text = "Ready",
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = Color(0xFF10B981)
-                                )
-                            }
-                        } else {
-                            Button(
-                                onClick = {
-                                    GoogleTranslationEngine.downloadModel(
-                                        langCode = lang.code,
-                                        onSuccess = {
-                                            downloadedCodes = downloadedCodes + lang.code
-                                        }
-                                    )
-                                },
-                                shape = RoundedCornerShape(12.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = PurpleLight, contentColor = PurplePrimary),
-                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
-                            ) {
-                                Icon(Icons.Default.CloudDownload, contentDescription = null, modifier = Modifier.size(16.dp))
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text("Download", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                             }
                         }
+                    }
+                } else {
+                    Button(
+                        onClick = onDownload,
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = PurpleLight,
+                            contentColor = PurplePrimary
+                        ),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.CloudDownload,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Download", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                     }
                 }
             }

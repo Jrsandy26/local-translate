@@ -26,7 +26,7 @@ object GoogleTranslationEngine {
         "good evening" to mapOf("ja" to "こんばんは", "es" to "Buenas noches", "fr" to "Bonsoir", "de" to "Guten Abend", "zh" to "晚上好"),
         "goodbye" to mapOf("ja" to "さようなら", "es" to "Adiós", "fr" to "Au revoir", "de" to "Auf Wiedersehen", "zh" to "再见"),
         "nice to meet you" to mapOf("ja" to "はじめまして", "es" to "Mucho gusto", "fr" to "Enchanté", "de" to "Schön, Sie kennenzulernen", "zh" to "很高兴认识你"),
-        "where is the train station" to mapOf("ja" to "駅はどこですか？", "es" to "¿Dónde está la駅はどこですか？", "es" to "¿Dónde está la estación de tren?", "fr" to "Où est la gare?", "de" to "Wo ist der Bahnhof?"),
+        "where is the train station" to mapOf("ja" to "駅はどこですか？", "es" to "¿Dónde está la estación de tren?", "fr" to "Où est la gare?", "de" to "Wo ist der Bahnhof?"),
         "how much does this cost" to mapOf("ja" to "これはいくらですか？", "es" to "¿Cuánto cuesta esto?", "fr" to "Combien ça coûte?", "de" to "Wie viel kostet das?"),
         "check please" to mapOf("ja" to "お会計をお願いします", "es" to "La cuenta, por favor", "fr" to "L'addition, s'il vous plaît", "de" to "Die Rechnung, bitte")
     )
@@ -51,6 +51,9 @@ object GoogleTranslationEngine {
             "nl" -> TranslateLanguage.DUTCH
             "pl" -> TranslateLanguage.POLISH
             "id" -> TranslateLanguage.INDONESIAN
+            "ta" -> TranslateLanguage.TAMIL
+            "te" -> TranslateLanguage.TELUGU
+            "kn" -> TranslateLanguage.KANNADA
             else -> TranslateLanguage.ENGLISH
         }
     }
@@ -105,6 +108,41 @@ object GoogleTranslationEngine {
             }
     }
 
+    fun deleteModel(
+        langCode: String,
+        onSuccess: () -> Unit = {},
+        onFailure: (Exception) -> Unit = {}
+    ) {
+        val mlKitCode = mapLangCode(langCode)
+        if (mlKitCode == TranslateLanguage.ENGLISH) {
+            onSuccess()
+            return
+        }
+
+        val model = TranslateRemoteModel.Builder(mlKitCode).build()
+        RemoteModelManager.getInstance().deleteDownloadedModel(model)
+            .addOnSuccessListener {
+                downloadedModelsCache[langCode] = false
+                
+                // Clear any cached translators that use this language
+                val iterator = translatorCache.entries.iterator()
+                while (iterator.hasNext()) {
+                    val entry = iterator.next()
+                    if (entry.key.contains(mlKitCode)) {
+                        try {
+                            entry.value.close()
+                        } catch (_: Exception) {}
+                        iterator.remove()
+                    }
+                }
+                
+                onSuccess()
+            }
+            .addOnFailureListener { e ->
+                onFailure(e)
+            }
+    }
+
     suspend fun translate(
         text: String,
         sourceLangCode: String,
@@ -124,6 +162,12 @@ object GoogleTranslationEngine {
         val srcCode = mapLangCode(sourceLangCode)
         val tgtCode = mapLangCode(targetLangCode)
         val cacheKey = "${srcCode}_to_${tgtCode}"
+
+        // Manage cache size - keep only 3 most recent translators
+        if (translatorCache.size >= 5) {
+            val oldestKey = translatorCache.keys().nextElement()
+            translatorCache.remove(oldestKey)?.close()
+        }
 
         val translator = translatorCache.getOrPut(cacheKey) {
             val options = TranslatorOptions.Builder()

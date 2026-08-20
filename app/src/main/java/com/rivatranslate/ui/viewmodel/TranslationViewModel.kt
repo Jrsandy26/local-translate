@@ -49,6 +49,7 @@ class TranslationViewModel(application: Application) : AndroidViewModel(applicat
     val homeInputText = MutableStateFlow("")
     val homeTranslatedText = MutableStateFlow("")
     val isTranslating = MutableStateFlow(false)
+    val isModelDownloading = MutableStateFlow(false)
 
     // Language selection
     private val _sourceLanguage = MutableStateFlow(Language.findByCode("ja"))
@@ -114,6 +115,53 @@ class TranslationViewModel(application: Application) : AndroidViewModel(applicat
     val showSettingsDialog = MutableStateFlow(false)
     val showNotificationsDialog = MutableStateFlow(false)
 
+    // Language Download States
+    private val _downloadedCodes = MutableStateFlow(setOf("en"))
+    val downloadedCodes: StateFlow<Set<String>> = _downloadedCodes.asStateFlow()
+
+    private val _downloadingCodes = MutableStateFlow(setOf<String>())
+    val downloadingCodes: StateFlow<Set<String>> = _downloadingCodes.asStateFlow()
+
+    fun refreshDownloadedModels() {
+        viewModelScope.launch {
+            val codes = mutableSetOf("en")
+            Language.ALL_LANGUAGES.forEach { lang ->
+                if (GoogleTranslationEngine.isModelDownloaded(lang.code)) {
+                    codes.add(lang.code)
+                }
+            }
+            _downloadedCodes.value = codes
+        }
+    }
+
+    fun downloadLanguageModel(langCode: String) {
+        _downloadingCodes.value = _downloadingCodes.value + langCode
+        GoogleTranslationEngine.downloadModel(
+            langCode = langCode,
+            onSuccess = {
+                _downloadedCodes.value = _downloadedCodes.value + langCode
+                _downloadingCodes.value = _downloadingCodes.value - langCode
+            },
+            onFailure = {
+                _downloadingCodes.value = _downloadingCodes.value - langCode
+            }
+        )
+    }
+
+    fun deleteLanguageModel(langCode: String) {
+        _downloadingCodes.value = _downloadingCodes.value + langCode
+        GoogleTranslationEngine.deleteModel(
+            langCode = langCode,
+            onSuccess = {
+                _downloadedCodes.value = _downloadedCodes.value - langCode
+                _downloadingCodes.value = _downloadingCodes.value - langCode
+            },
+            onFailure = {
+                _downloadingCodes.value = _downloadingCodes.value - langCode
+            }
+        )
+    }
+
     // Settings & Theme Preferences
     private val prefs = application.getSharedPreferences("app_settings", Context.MODE_PRIVATE)
     val themeMode = MutableStateFlow(
@@ -157,6 +205,7 @@ class TranslationViewModel(application: Application) : AndroidViewModel(applicat
     private var speechHelper: SpeechRecognitionHelper? = null
     private var ttsHelper: TextToSpeechHelper? = null
     private var translateDebounceJob: Job? = null
+    private var historySaveJob: Job? = null
 
     init {
         val db = AppDatabase.getDatabase(application)
@@ -310,10 +359,18 @@ class TranslationViewModel(application: Application) : AndroidViewModel(applicat
     fun onHomeInputChanged(text: String) {
         homeInputText.value = text
         if (text.isBlank()) {
-            homeTranslatedText.value = ""
+            clearHomeInput()
             return
         }
         triggerTranslation(text)
+    }
+
+    fun clearHomeInput() {
+        homeInputText.value = ""
+        homeTranslatedText.value = ""
+        isTranslating.value = false
+        translateDebounceJob?.cancel()
+        historySaveJob?.cancel()
     }
 
     private fun triggerTranslation(text: String) {
@@ -321,6 +378,15 @@ class TranslationViewModel(application: Application) : AndroidViewModel(applicat
         translateDebounceJob = viewModelScope.launch {
             delay(300)
             isTranslating.value = true
+            
+            // Check if model is downloaded
+            val isSrcDownloaded = GoogleTranslationEngine.isModelDownloaded(_sourceLanguage.value.code)
+            val isTgtDownloaded = GoogleTranslationEngine.isModelDownloaded(_targetLanguage.value.code)
+            
+            if (!isSrcDownloaded || !isTgtDownloaded) {
+                isModelDownloading.value = true
+            }
+
             try {
                 val result = GoogleTranslationEngine.translate(
                     text = text,
@@ -329,22 +395,31 @@ class TranslationViewModel(application: Application) : AndroidViewModel(applicat
                 )
                 homeTranslatedText.value = result
                 
-                // Add to recent if non-empty
-                if (text.trim().length > 1) {
-                    repository.addRecentTranslation(
-                        source = text.trim(),
-                        translated = result,
-                        sourceLang = _sourceLanguage.value.code,
-                        targetLang = _targetLanguage.value.code
-                    )
-                }
+                // Debounced history save
+                scheduleHistorySave(text.trim(), result)
             } catch (e: kotlinx.coroutines.CancellationException) {
-                // Ignore debounce cancellations cleanly without error logs
+                // Ignore debounce cancellations cleanly
             } catch (e: Exception) {
                 Log.e("TranslationVM", "Translation error", e)
             } finally {
                 isTranslating.value = false
+                isModelDownloading.value = false
             }
+        }
+    }
+
+    private fun scheduleHistorySave(source: String, translated: String) {
+        if (source.length <= 1) return
+        
+        historySaveJob?.cancel()
+        historySaveJob = viewModelScope.launch {
+            delay(2000) // Wait for user to stop typing
+            repository.addRecentTranslation(
+                source = source,
+                translated = translated,
+                sourceLang = _sourceLanguage.value.code,
+                targetLang = _targetLanguage.value.code
+            )
         }
     }
 

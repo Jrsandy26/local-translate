@@ -26,7 +26,10 @@ data class Language(
             Language("th", "Thai", "ไทย", "🇹🇭", false),
             Language("nl", "Dutch", "Nederlands", "🇳🇱", false),
             Language("pl", "Polish", "Polski", "🇵🇱", false),
-            Language("id", "Indonesian", "Bahasa Indonesia", "🇮🇩", false)
+            Language("id", "Indonesian", "Bahasa Indonesia", "🇮🇩", false),
+            Language("ta", "Tamil", "தமிழ்", "🇮🇳", false),
+            Language("te", "Telugu", "తెలుగు", "🇮🇳", false),
+            Language("kn", "Kannada", "ಕನ್ನಡ", "🇮🇳", false)
         )
 
         fun findByCode(code: String): Language {

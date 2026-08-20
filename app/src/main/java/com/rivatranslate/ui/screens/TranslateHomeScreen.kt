@@ -10,6 +10,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ChatBubbleOutline
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.GraphicEq
@@ -55,6 +56,8 @@ fun TranslateHomeScreen(
     val targetLang by viewModel.targetLanguage.collectAsState()
     val inputText by viewModel.homeInputText.collectAsState()
     val translatedText by viewModel.homeTranslatedText.collectAsState()
+    val isTranslating by viewModel.isTranslating.collectAsState()
+    val isModelDownloading by viewModel.isModelDownloading.collectAsState()
     val isListening by viewModel.isListening.collectAsState()
     val recentTranslations by viewModel.recentTranslations.collectAsState()
     val themeMode by viewModel.themeMode.collectAsState()
@@ -227,6 +230,26 @@ fun TranslateHomeScreen(
                         )
                     }
 
+                    if (isTranslating || isModelDownloading) {
+                        LinearProgressIndicator(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 8.dp)
+                                .height(2.dp),
+                            color = colors.primary,
+                            trackColor = colors.primary.copy(alpha = 0.1f)
+                        )
+                    }
+
+                    if (isModelDownloading) {
+                        Text(
+                            text = "Initializing models...",
+                            fontSize = 11.sp,
+                            color = colors.textSecondary,
+                            modifier = Modifier.padding(top = 4.dp)
+                        )
+                    }
+
                     Spacer(modifier = Modifier.height(16.dp))
 
                     // Editable Input Area with Placeholder
@@ -253,8 +276,26 @@ fun TranslateHomeScreen(
                                 lineHeight = 22.sp
                             ),
                             cursorBrush = SolidColor(colors.primary),
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(end = if (inputText.isNotEmpty()) 32.dp else 0.dp)
                         )
+
+                        if (inputText.isNotEmpty()) {
+                            IconButton(
+                                onClick = { viewModel.clearHomeInput() },
+                                modifier = Modifier
+                                    .align(Alignment.TopEnd)
+                                    .size(24.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = "Clear",
+                                    tint = colors.textMuted,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                        }
                     }
 
                     // Translated Result Live Preview (if typed)
