@@ -85,6 +85,7 @@ fun LiveTranslateScreen(
     val partialText by viewModel.livePartialText.collectAsState()
     val partialTranslated by viewModel.livePartialTranslated.collectAsState()
     val rmsLevel by viewModel.rmsLevel.collectAsState()
+    val micError by viewModel.micErrorMessage.collectAsState()
 
     val showStoppedDialog by viewModel.showSessionStoppedDialog.collectAsState()
     val completedSession by viewModel.completedSession.collectAsState()
@@ -187,6 +188,7 @@ fun LiveTranslateScreen(
                         partialText = partialText,
                         partialTranslated = partialTranslated,
                         isPaused = isSessionPaused,
+                        micError = micError,
                         onExportClick = { showLiveExportDialog = true }
                     )
                 } else {
@@ -194,7 +196,8 @@ fun LiveTranslateScreen(
                         recordAudioChecked = recordAudioChecked,
                         onRecordAudioToggle = { viewModel.toggleRecordAudio() },
                         onStartClick = { viewModel.startLiveSession() },
-                        rmsLevel = rmsLevel
+                        rmsLevel = rmsLevel,
+                        micError = micError
                     )
                 }
             }
@@ -379,7 +382,8 @@ private fun IdleLiveTranslateView(
     recordAudioChecked: Boolean,
     onRecordAudioToggle: () -> Unit,
     onStartClick: () -> Unit,
-    rmsLevel: Float
+    rmsLevel: Float,
+    micError: String? = null
 ) {
     Column(
         modifier = Modifier
@@ -416,6 +420,18 @@ private fun IdleLiveTranslateView(
                 textAlign = TextAlign.Center,
                 lineHeight = 22.sp
             )
+
+            if (micError != null) {
+                Spacer(modifier = Modifier.height(10.dp))
+                Text(
+                    text = micError,
+                    fontSize = 13.sp,
+                    color = StopRed,
+                    fontWeight = FontWeight.SemiBold,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(horizontal = 16.dp)
+                )
+            }
 
             Spacer(modifier = Modifier.height(28.dp))
 
@@ -528,6 +544,7 @@ private fun ActiveLiveTranscriptView(
     partialText: String,
     partialTranslated: String,
     isPaused: Boolean,
+    micError: String?,
     onExportClick: () -> Unit
 ) {
     Column(
@@ -535,7 +552,7 @@ private fun ActiveLiveTranscriptView(
             .fillMaxSize()
             .padding(horizontal = 20.dp, vertical = 16.dp)
     ) {
-        // Top status & export row
+        // ... Existing top status row ...
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -600,29 +617,88 @@ private fun ActiveLiveTranscriptView(
         Spacer(modifier = Modifier.height(10.dp))
 
         // Transcript Items
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize(),
-            verticalArrangement = Arrangement.spacedBy(18.dp)
-        ) {
-            items(segments) { item ->
-                TranscriptBubbleItem(
-                    sourceLangTag = sourceLang.nativeName,
-                    sourceText = item.sourceText,
-                    targetLangTag = targetLang.name,
-                    targetText = item.translatedText
-                )
+        Box(modifier = Modifier.weight(1f)) {
+            if (segments.isEmpty() && partialText.isBlank() && !isPaused) {
+                Column(
+                    modifier = Modifier.fillMaxSize(),
+                    verticalArrangement = Arrangement.Center,
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    if (micError != null) {
+                        Icon(
+                            imageVector = Icons.Default.Stop,
+                            contentDescription = null,
+                            tint = StopRed.copy(alpha = 0.6f),
+                            modifier = Modifier.size(48.dp)
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text(
+                            text = micError,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = StopRed,
+                            textAlign = TextAlign.Center
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "Microphone may be in use by another app or recording process.",
+                            fontSize = 13.sp,
+                            color = SubtitleBrownText,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.padding(horizontal = 24.dp)
+                        )
+                    } else {
+                        val infiniteTransition = rememberInfiniteTransition(label = "InitPulse")
+                        val scale by infiniteTransition.animateFloat(
+                            initialValue = 0.95f,
+                            targetValue = 1.05f,
+                            animationSpec = infiniteRepeatable(
+                                animation = tween(1000, easing = FastOutSlowInEasing),
+                                repeatMode = RepeatMode.Reverse
+                            ),
+                            label = "Scale"
+                        )
+                        
+                        Icon(
+                            imageVector = Icons.Default.Mic,
+                            contentDescription = null,
+                            tint = WarmOrange.copy(alpha = 0.3f),
+                            modifier = Modifier.size(64.dp).scale(scale)
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text(
+                            text = "Listening for speech...",
+                            fontSize = 15.sp,
+                            color = SubtitleBrownText.copy(alpha = 0.7f),
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                }
             }
 
-            // Real-time streaming speech item
-            if (partialText.isNotBlank()) {
-                item {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                verticalArrangement = Arrangement.spacedBy(18.dp)
+            ) {
+                items(segments) { item ->
                     TranscriptBubbleItem(
                         sourceLangTag = sourceLang.nativeName,
-                        sourceText = partialText,
+                        sourceText = item.sourceText,
                         targetLangTag = targetLang.name,
-                        targetText = if (partialTranslated.isNotBlank()) partialTranslated else "..."
+                        targetText = item.translatedText
                     )
+                }
+
+                // Real-time streaming speech item
+                if (partialText.isNotBlank()) {
+                    item {
+                        TranscriptBubbleItem(
+                            sourceLangTag = sourceLang.nativeName,
+                            sourceText = partialText,
+                            targetLangTag = targetLang.name,
+                            targetText = if (partialTranslated.isNotBlank()) partialTranslated else "..."
+                        )
+                    }
                 }
             }
         }

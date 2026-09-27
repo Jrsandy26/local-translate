@@ -27,15 +27,31 @@ class AudioRecorderHelper(private val context: Context) {
                 MediaRecorder()
             }
 
-            recorder.apply {
-                setAudioSource(MediaRecorder.AudioSource.MIC)
-                setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
-                setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
-                setAudioEncodingBitRate(128000)
-                setAudioSamplingRate(44100)
-                setOutputFile(outputFile.absolutePath)
-                prepare()
-                start()
+            val audioSource = MediaRecorder.AudioSource.VOICE_RECOGNITION
+            try {
+                recorder.apply {
+                    setAudioSource(audioSource)
+                    setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
+                    setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
+                    setAudioEncodingBitRate(128000)
+                    setAudioSamplingRate(44100)
+                    setOutputFile(outputFile.absolutePath)
+                    prepare()
+                    start()
+                }
+            } catch (e: Throwable) {
+                Log.w("AudioRecorder", "VOICE_RECOGNITION audio source failed, trying MIC fallback", e)
+                recorder.reset()
+                recorder.apply {
+                    setAudioSource(MediaRecorder.AudioSource.MIC)
+                    setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
+                    setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
+                    setAudioEncodingBitRate(128000)
+                    setAudioSamplingRate(44100)
+                    setOutputFile(outputFile.absolutePath)
+                    prepare()
+                    start()
+                }
             }
 
             mediaRecorder = recorder

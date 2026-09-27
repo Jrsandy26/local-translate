@@ -30,6 +30,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import android.media.AudioAttributes
+import android.media.AudioFocusRequest
+import android.media.AudioManager
 import java.util.Locale
 
 class TranslationViewModel(application: Application) : AndroidViewModel(application) {
@@ -76,7 +79,8 @@ class TranslationViewModel(application: Application) : AndroidViewModel(applicat
     val isLiveSessionRunning = MutableStateFlow(false)
     val isLiveSessionPaused = MutableStateFlow(false)
     val liveTimerSeconds = MutableStateFlow(0)
-    val recordAudioChecked = MutableStateFlow(true)
+    val recordAudioChecked = MutableStateFlow(false)
+    val micErrorMessage = MutableStateFlow<String?>(null)
     private var liveTimerJob: Job? = null
     private var lastRecordedAudioPath: String? = null
 
@@ -206,6 +210,7 @@ class TranslationViewModel(application: Application) : AndroidViewModel(applicat
     private var ttsHelper: TextToSpeechHelper? = null
     private var translateDebounceJob: Job? = null
     private var historySaveJob: Job? = null
+    private var partialTranslateJob: Job? = null
 
     init {
         val db = AppDatabase.getDatabase(application)
@@ -245,6 +250,39 @@ class TranslationViewModel(application: Application) : AndroidViewModel(applicat
             },
             onListeningStateChanged = { listening ->
                 _isListening.value = listening
+            },
+            onErrorOccurred = { code, msg ->
+                when (code) {
+                    android.speech.SpeechRecognizer.ERROR_NO_MATCH,
+                    android.speech.SpeechRecognizer.ERROR_SPEECH_TIMEOUT,
+                    android.speech.SpeechRecognizer.ERROR_CLIENT -> {
+                        // Normal speech pauses or recoverable client resets - keep UI clean
+                        micErrorMessage.value = null
+                    }
+                    android.speech.SpeechRecognizer.ERROR_AUDIO,
+                    android.speech.SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> {
+                        // Hardware mic conflict or Android System Intelligence busy
+                        // Stop secondary media recording if running to free hardware mic
+                        try {
+                            audioRecorderHelper.stopRecording()
+                        } catch (_: Throwable) {}
+                        micErrorMessage.value = null
+                    }
+                    android.speech.SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> {
+                        micErrorMessage.value = "Microphone permission is required."
+                    }
+                    android.speech.SpeechRecognizer.ERROR_NETWORK,
+                    android.speech.SpeechRecognizer.ERROR_NETWORK_TIMEOUT,
+                    android.speech.SpeechRecognizer.ERROR_SERVER -> {
+                        micErrorMessage.value = "Network connection required for online speech recognition."
+                    }
+                    12, 13, 14 -> { // ERROR_LANGUAGE_NOT_SUPPORTED, ERROR_LANGUAGE_UNAVAILABLE, ERROR_CANNOT_CHECK_SUPPORT
+                        micErrorMessage.value = "Language model not available. Please check internet connection."
+                    }
+                    else -> {
+                        Log.w("TranslationVM", "Speech recognition transient error: $msg ($code)")
+                    }
+                }
             },
             onAudioBufferReceived = { buffer ->
                 if (buffer != null && buffer.isNotEmpty()) {
@@ -303,10 +341,26 @@ class TranslationViewModel(application: Application) : AndroidViewModel(applicat
             showSettingsDialog.value = false
             return true
         }
+        if (showSessionDetailDialog.value) {
+            showSessionDetailDialog.value = false
+            return true
+        }
+        if (showSessionStoppedDialog.value) {
+            showSessionStoppedDialog.value = false
+            return true
+        }
 
-        // 2. Stop ongoing speech recognition if active in sub-screens
+        // 2. Stop ongoing speech recognition and media playback if active
         if (isListening.value) {
             speechHelper?.stopListening()
+        }
+        if (isAudioPlaying.value || activePlaybackSegmentIndex.value != -1) {
+            stopAudioPlayback()
+        }
+        
+        // Ensure live session is fully stopped and cleaned up before leaving the screen
+        if (isLiveSessionRunning.value) {
+            stopLiveSession(showDialog = false)
         }
 
         // 3. Navigate back through backstack
@@ -423,11 +477,23 @@ class TranslationViewModel(application: Application) : AndroidViewModel(applicat
         }
     }
 
+    private fun isMicPermissionGranted(): Boolean {
+        return androidx.core.content.ContextCompat.checkSelfPermission(
+            getApplication(),
+            android.Manifest.permission.RECORD_AUDIO
+        ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+    }
+
     fun toggleMicListening() {
         if (_isListening.value) {
             speechHelper?.stopListening()
         } else {
-            val locale = Locale.forLanguageTag(_sourceLanguage.value.code)
+            if (!isMicPermissionGranted()) {
+                micErrorMessage.value = "Microphone permission is required."
+                return
+            }
+            micErrorMessage.value = null
+            val locale = Locale(_sourceLanguage.value.code)
             speechHelper?.continuousMode = false
             speechHelper?.startListening(locale)
         }
@@ -440,17 +506,46 @@ class TranslationViewModel(application: Application) : AndroidViewModel(applicat
         liveTimerSeconds.value = 0
         isLiveSessionRunning.value = true
         isLiveSessionPaused.value = false
-        
+        micErrorMessage.value = null
+
+        if (!isMicPermissionGranted()) {
+            micErrorMessage.value = "Microphone permission is required for live translation."
+            return
+        }
+
+        // Request Audio Focus
+        val audioManager = getApplication<Application>().getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        val focusRequest = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK)
+            .setAudioAttributes(
+                AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_ASSISTANCE_NAVIGATION_GUIDANCE)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                    .build()
+            )
+            .build()
+        audioManager.requestAudioFocus(focusRequest)
+
+        // Start STT first to claim the microphone
+        speechHelper?.continuousMode = true
+        LiveSessionManager.startService(getApplication())
+        val locale = Locale(_sourceLanguage.value.code)
+        speechHelper?.startListening(locale)
+
+        // Delay audio recording slightly to avoid concurrent access issues on some devices
         if (recordAudioChecked.value) {
-            lastRecordedAudioPath = audioRecorderHelper.startRecording()
+            viewModelScope.launch {
+                delay(1200)
+                if (isLiveSessionRunning.value && !isLiveSessionPaused.value) {
+                    try {
+                        lastRecordedAudioPath = audioRecorderHelper.startRecording()
+                    } catch (e: Throwable) {
+                        Log.w("TranslationVM", "Live session recording failed, continuing STT", e)
+                    }
+                }
+            }
         } else {
             lastRecordedAudioPath = null
         }
-
-        speechHelper?.continuousMode = true
-        LiveSessionManager.startService(getApplication())
-        val locale = Locale.forLanguageTag(_sourceLanguage.value.code)
-        speechHelper?.startListening(locale)
     }
 
     fun pauseLiveSession() {
@@ -464,11 +559,11 @@ class TranslationViewModel(application: Application) : AndroidViewModel(applicat
         isLiveSessionPaused.value = false
         audioRecorderHelper.resumeRecording()
         LiveSessionManager.resumeService(getApplication())
-        val locale = Locale.forLanguageTag(_sourceLanguage.value.code)
+        val locale = Locale(_sourceLanguage.value.code)
         speechHelper?.resumeListening(locale)
     }
 
-    fun stopLiveSession() {
+    fun stopLiveSession(showDialog: Boolean = true) {
         isLiveSessionRunning.value = false
         isLiveSessionPaused.value = false
         speechHelper?.stopListening()
@@ -559,7 +654,16 @@ class TranslationViewModel(application: Application) : AndroidViewModel(applicat
                 createdAt = System.currentTimeMillis()
             )
             completedSegments.value = savedSegments
-            showSessionStoppedDialog.value = true
+
+            // Reset live transcript state so older conversation does not linger
+            liveSegments.value = emptyList()
+            livePartialText.value = ""
+            livePartialTranslated.value = ""
+            liveTimerSeconds.value = 0
+
+            if (showDialog) {
+                showSessionStoppedDialog.value = true
+            }
         }
     }
 
@@ -703,10 +807,14 @@ class TranslationViewModel(application: Application) : AndroidViewModel(applicat
     }
 
     private fun handlePartialSpeech(partial: String) {
+        if (partial.isBlank()) return
+
         when (_activeScreen.value) {
             ActiveScreen.HOME -> {
                 homeInputText.value = partial
-                viewModelScope.launch {
+                partialTranslateJob?.cancel()
+                partialTranslateJob = viewModelScope.launch {
+                    delay(150) // Debounce for real-time responsiveness
                     val res = GoogleTranslationEngine.translate(
                         partial,
                         _sourceLanguage.value.code,
@@ -717,7 +825,9 @@ class TranslationViewModel(application: Application) : AndroidViewModel(applicat
             }
             ActiveScreen.LIVE_TRANSLATE -> {
                 livePartialText.value = partial
-                viewModelScope.launch {
+                partialTranslateJob?.cancel()
+                partialTranslateJob = viewModelScope.launch {
+                    delay(150) // Debounce
                     val res = GoogleTranslationEngine.translate(
                         partial,
                         _sourceLanguage.value.code,

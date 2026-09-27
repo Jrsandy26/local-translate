@@ -112,7 +112,7 @@ class LiveTranslationService : Service() {
     private fun startForegroundWithNotification() {
         try {
             val notification = buildLiveNotification()
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                 try {
                     startForeground(
                         NOTIFICATION_ID,

@@ -224,12 +224,12 @@ object TranslationExportHelper {
 
         // Paints
         val brandPaint = Paint().apply {
-            color = Color.parseColor("#EE7931")
+            color = 0xFFEE7931.toInt()
             isAntiAlias = true
         }
 
         val headerBgPaint = Paint().apply {
-            color = Color.parseColor("#FFF4EC")
+            color = 0xFFFFF4EC.toInt()
             isAntiAlias = true
         }
 
